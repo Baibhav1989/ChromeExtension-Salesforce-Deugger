@@ -786,18 +786,23 @@ body {
   padding: 6px 10px;
   border-top: 1px solid #1f1f1f;
   background: #000000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .footer-content {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  justify-content: center;
   color: #f2f2f2;
   font-size: 12px;
   white-space: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
+  max-width: 100%;
 }
 
 .footer-content::-webkit-scrollbar {

@@ -123,6 +123,9 @@ body {
 
 /* ——— Branding strip ——— */
 .branding-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   background: linear-gradient(180deg, #03234d 0%, #021a3a 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding: 6px 10px;
