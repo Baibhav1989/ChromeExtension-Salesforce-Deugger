@@ -1,0 +1,51 @@
+/* Standalone options page — extends popup theme */
+.options-body {
+  margin: 0;
+  min-height: 100vh;
+  padding: 28px 20px 40px;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.options-page-header {
+  margin-bottom: 20px;
+}
+
+.options-page-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.options-page-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.options-page-note {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
+}
+
+.options-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.options-footer {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}

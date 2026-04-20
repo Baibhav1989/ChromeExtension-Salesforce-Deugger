@@ -49,7 +49,9 @@
         <button type="button" class="btn btn--ghost btn--header" id="btnRefresh" title="Refresh now">
           Refresh
         </button>
-        <a class="btn btn--ghost btn--header" id="linkOptions" href="#" title="Settings">Settings</a>
+        <button type="button" class="btn btn--ghost btn--header" id="btnOpenSettings" title="Settings">
+          Settings
+        </button>
       </div>
     </header>
 
@@ -125,6 +127,96 @@
       <p class="error" id="errorState" hidden></p>
     </div>
 
-    <script src="popup.js"></script>
+    <div
+      class="settings-overlay"
+      id="settingsOverlay"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settingsOverlayTitle"
+    >
+      <div class="settings-overlay__panel">
+        <header class="settings-overlay__header">
+          <div class="settings-overlay__head-text">
+            <h2 class="settings-overlay__title" id="settingsOverlayTitle">Settings</h2>
+            <p class="settings-overlay__subtitle">
+              Log list, refresh defaults, trace duration, and debug levels for <strong>Set Log</strong>.
+            </p>
+          </div>
+          <button type="button" class="settings-overlay__close" id="btnCloseSettings" aria-label="Close settings">
+            ×
+          </button>
+        </header>
+        <div class="settings-overlay__body">
+          <section class="settings-card">
+            <h3 class="settings-card__title">General</h3>
+            <div class="settings-fields">
+              <label class="settings-field">
+                <span class="settings-field__label">Logs to fetch</span>
+                <span class="settings-field__hint">Max 200 per load</span>
+                <input type="number" id="settLogLimit" min="1" max="200" class="settings-field__input" />
+              </label>
+              <label class="settings-field">
+                <span class="settings-field__label">Default auto-refresh</span>
+                <span class="settings-field__hint">Used when the popup opens</span>
+                <select id="settRefreshSeconds" class="settings-field__select">
+                  <option value="0">Manual only</option>
+                  <option value="10">10 s</option>
+                  <option value="15">15 s</option>
+                  <option value="30">30 s</option>
+                  <option value="60">60 s</option>
+                </select>
+              </label>
+              <label class="settings-field">
+                <span class="settings-field__label"
+                  >Trace duration (Set Log)
+                  <span
+                    class="settings-info-chip"
+                    title="Trace Flag expiration when you use Set Log in this popup."
+                    aria-label="Trace duration info"
+                    >i</span
+                  ></span
+                >
+                <span class="settings-field__hint">Minutes until trace expires</span>
+                <select id="settTraceDurationMinutes" class="settings-field__select">
+                  <option value="15">15</option>
+                  <option value="30">30</option>
+                  <option value="60">60</option>
+                  <option value="120">120</option>
+                  <option value="240">240</option>
+                </select>
+              </label>
+            </div>
+          </section>
+          <section class="settings-card">
+            <h3 class="settings-card__title">Debug level defaults</h3>
+            <p class="settings-card__lead">Applied when creating a trace via Set Log.</p>
+            <div class="settings-debug-grid">
+              <label class="settings-debug-pair" for="settDbgApexCode"><span>Apex Code</span></label>
+              <select id="settDbgApexCode" class="settings-field__select settings-field__select--compact"></select>
+              <label class="settings-debug-pair" for="settDbgApexProfiling"><span>Apex Profiling</span></label>
+              <select id="settDbgApexProfiling" class="settings-field__select settings-field__select--compact"></select>
+              <label class="settings-debug-pair" for="settDbgCallout"><span>Callout</span></label>
+              <select id="settDbgCallout" class="settings-field__select settings-field__select--compact"></select>
+              <label class="settings-debug-pair" for="settDbgDatabase"><span>Database</span></label>
+              <select id="settDbgDatabase" class="settings-field__select settings-field__select--compact"></select>
+              <label class="settings-debug-pair" for="settDbgSystem"><span>System</span></label>
+              <select id="settDbgSystem" class="settings-field__select settings-field__select--compact"></select>
+              <label class="settings-debug-pair" for="settDbgValidation"><span>Validation</span></label>
+              <select id="settDbgValidation" class="settings-field__select settings-field__select--compact"></select>
+              <label class="settings-debug-pair" for="settDbgVisualforce"><span>Visualforce</span></label>
+              <select id="settDbgVisualforce" class="settings-field__select settings-field__select--compact"></select>
+              <label class="settings-debug-pair" for="settDbgWorkflow"><span>Workflow</span></label>
+              <select id="settDbgWorkflow" class="settings-field__select settings-field__select--compact"></select>
+            </div>
+          </section>
+        </div>
+        <footer class="settings-overlay__footer">
+          <span class="settings-saved" id="settSavedHint" aria-live="polite"></span>
+        </footer>
+      </div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
   </body>
 </html>

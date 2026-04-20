@@ -4,161 +4,92 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Salesforce Debugger — Settings</title>
-    <style>
-      :root {
-        font-family: "Segoe UI", system-ui, sans-serif;
-        color: #15202b;
-        background: #f4f6f9;
-      }
-      body {
-        max-width: 780px;
-        margin: 40px auto;
-        padding: 0 20px;
-      }
-      h1 {
-        font-size: 20px;
-      }
-      label {
-        display: block;
-        font-weight: 600;
-      }
-      input,
-      select {
-        width: 100%;
-        padding: 8px 10px;
-        border-radius: 6px;
-        border: 1px solid #c4cdd8;
-      }
-      p {
-        color: #5a6b82;
-        font-size: 13px;
-      }
-      .saved {
-        color: #2e844a;
-        font-size: 13px;
-        margin-top: 12px;
-        min-height: 18px;
-      }
-      .section-title {
-        margin-top: 22px;
-        font-size: 16px;
-      }
-      .form-grid {
-        display: grid;
-        gap: 12px;
-        max-width: 560px;
-      }
-      .form-row {
-        display: grid;
-        gap: 6px;
-      }
-      .debug-grid {
-        display: grid;
-        grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr);
-        gap: 8px 16px;
-        max-width: 640px;
-      }
-      .label-with-info {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .debug-label {
-        display: flex;
-        align-items: center;
-        min-height: 38px;
-      }
-      .info-chip {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 16px;
-        height: 16px;
-        border-radius: 999px;
-        border: 1px solid #c4cdd8;
-        font-size: 11px;
-        color: #5a6b82;
-        cursor: help;
-        user-select: none;
-      }
-    </style>
+    <link rel="stylesheet" href="../popup/popup.css" />
+    <link rel="stylesheet" href="options.css" />
   </head>
-  <body>
-    <h1>Salesforce Debugger</h1>
-    <p>
-      Adjust how many logs are fetched and how often the popup refreshes. You must have API access
-      and permission to view Apex debug logs for your user.
-    </p>
+  <body class="options-body">
+    <header class="options-page-header">
+      <h1 class="options-page-title">Salesforce Debugger</h1>
+      <p class="options-page-lead">
+        Log list size, refresh defaults, trace duration, and debug levels for
+        <strong>Set Log</strong>. You need API access and permission to view Apex debug logs.
+      </p>
+      <p class="options-page-note">
+        Tip: open the toolbar popup and use <strong>Settings</strong> for the same controls without leaving
+        your workflow.
+      </p>
+    </header>
 
-    <div class="form-grid">
-      <div class="form-row">
-        <label for="logLimit">Logs to fetch (max 200)</label>
-        <input type="number" id="logLimit" min="1" max="200" />
-      </div>
+    <div class="options-stack">
+      <section class="settings-card">
+        <h2 class="settings-card__title">General</h2>
+        <div class="settings-fields">
+          <label class="settings-field">
+            <span class="settings-field__label">Logs to fetch</span>
+            <span class="settings-field__hint">Max 200 per load</span>
+            <input type="number" id="logLimit" min="1" max="200" class="settings-field__input" />
+          </label>
+          <label class="settings-field">
+            <span class="settings-field__label">Default auto-refresh</span>
+            <span class="settings-field__hint">When the popup opens</span>
+            <select id="refreshSeconds" class="settings-field__select">
+              <option value="0">Manual only</option>
+              <option value="10">10 s</option>
+              <option value="15">15 s</option>
+              <option value="30">30 s</option>
+              <option value="60">60 s</option>
+            </select>
+          </label>
+          <label class="settings-field">
+            <span class="settings-field__label"
+              >Trace duration (Set Log)
+              <span
+                class="settings-info-chip"
+                title="Trace Flag expiration when you use Set Log in the popup."
+                aria-label="Trace duration info"
+                >i</span
+              ></span
+            >
+            <span class="settings-field__hint">Minutes until trace expires</span>
+            <select id="traceDurationMinutes" class="settings-field__select">
+              <option value="15">15</option>
+              <option value="30">30</option>
+              <option value="60">60</option>
+              <option value="120">120</option>
+              <option value="240">240</option>
+            </select>
+          </label>
+        </div>
+      </section>
 
-      <div class="form-row">
-        <label for="refreshSeconds">Default auto-refresh interval (seconds)</label>
-        <select id="refreshSeconds">
-          <option value="0">Manual only</option>
-          <option value="10">10</option>
-          <option value="15">15</option>
-          <option value="30">30</option>
-          <option value="60">60</option>
-        </select>
-      </div>
-
-      <div class="form-row">
-        <label for="traceDurationMinutes" class="label-with-info">
-          <span>Trace duration for Set Log (minutes)</span>
-          <span
-            class="info-chip"
-            title="When you click Set Log in popup, Trace Flag expiration is set for this duration."
-            aria-label="Trace duration info"
-            >i</span
-          >
-        </label>
-        <select id="traceDurationMinutes">
-          <option value="15">15</option>
-          <option value="30">30</option>
-          <option value="60">60</option>
-          <option value="120">120</option>
-          <option value="240">240</option>
-        </select>
-      </div>
+      <section class="settings-card">
+        <h2 class="settings-card__title">Debug level defaults</h2>
+        <p class="settings-card__lead">Applied when creating a trace via Set Log.</p>
+        <div class="settings-debug-grid">
+          <label class="settings-debug-pair" for="dbgApexCode"><span>Apex Code</span></label>
+          <select id="dbgApexCode" class="settings-field__select settings-field__select--compact"></select>
+          <label class="settings-debug-pair" for="dbgApexProfiling"><span>Apex Profiling</span></label>
+          <select id="dbgApexProfiling" class="settings-field__select settings-field__select--compact"></select>
+          <label class="settings-debug-pair" for="dbgCallout"><span>Callout</span></label>
+          <select id="dbgCallout" class="settings-field__select settings-field__select--compact"></select>
+          <label class="settings-debug-pair" for="dbgDatabase"><span>Database</span></label>
+          <select id="dbgDatabase" class="settings-field__select settings-field__select--compact"></select>
+          <label class="settings-debug-pair" for="dbgSystem"><span>System</span></label>
+          <select id="dbgSystem" class="settings-field__select settings-field__select--compact"></select>
+          <label class="settings-debug-pair" for="dbgValidation"><span>Validation</span></label>
+          <select id="dbgValidation" class="settings-field__select settings-field__select--compact"></select>
+          <label class="settings-debug-pair" for="dbgVisualforce"><span>Visualforce</span></label>
+          <select id="dbgVisualforce" class="settings-field__select settings-field__select--compact"></select>
+          <label class="settings-debug-pair" for="dbgWorkflow"><span>Workflow</span></label>
+          <select id="dbgWorkflow" class="settings-field__select settings-field__select--compact"></select>
+        </div>
+      </section>
     </div>
 
-    <h2 class="section-title">Debug Level Defaults</h2>
-    <p>
-      These levels are used when you click <strong>Set Log</strong> in popup for a selected user.
-    </p>
-    <div class="debug-grid">
-      <label class="debug-label" for="dbgApexCode">Apex Code</label>
-      <select id="dbgApexCode"></select>
+    <footer class="options-footer">
+      <span class="settings-saved" id="saved" aria-live="polite"></span>
+    </footer>
 
-      <label class="debug-label" for="dbgApexProfiling">Apex Profiling</label>
-      <select id="dbgApexProfiling"></select>
-
-      <label class="debug-label" for="dbgCallout">Callout</label>
-      <select id="dbgCallout"></select>
-
-      <label class="debug-label" for="dbgDatabase">Database</label>
-      <select id="dbgDatabase"></select>
-
-      <label class="debug-label" for="dbgSystem">System</label>
-      <select id="dbgSystem"></select>
-
-      <label class="debug-label" for="dbgValidation">Validation</label>
-      <select id="dbgValidation"></select>
-
-      <label class="debug-label" for="dbgVisualforce">Visualforce</label>
-      <select id="dbgVisualforce"></select>
-
-      <label class="debug-label" for="dbgWorkflow">Workflow</label>
-      <select id="dbgWorkflow"></select>
-    </div>
-
-    <div class="saved" id="saved"></div>
-
-    <script src="options.js"></script>
+    <script type="module" src="options.js"></script>
   </body>
 </html>

@@ -1,3 +1,13 @@
+import {
+  SETTINGS_STORAGE_DEFAULTS,
+  DEFAULT_DEBUG_LEVELS,
+  initAllDebugLevelSelects,
+  readDebugLevelsFromSelects,
+  applyDebugLevelsToSelects,
+  clampLogLimit,
+  clampTraceMinutes,
+} from "../lib/extension-settings.js";
+
 const logList = document.getElementById("logList");
 const emptyState = document.getElementById("emptyState");
 const errorState = document.getElementById("errorState");
@@ -18,23 +28,27 @@ const REMOVE_LOG_TITLE_NEED_SF_TAB = "Open a Salesforce tab first";
 const refreshSelect = document.getElementById("refreshSelect");
 const userSearchInput = document.getElementById("userSearchInput");
 const userTypeaheadList = document.getElementById("userTypeaheadList");
-const linkOptions = document.getElementById("linkOptions");
+const btnOpenSettings = document.getElementById("btnOpenSettings");
+const settingsOverlay = document.getElementById("settingsOverlay");
+const btnCloseSettings = document.getElementById("btnCloseSettings");
+const settLogLimit = document.getElementById("settLogLimit");
+const settRefreshSeconds = document.getElementById("settRefreshSeconds");
+const settTraceDurationMinutes = document.getElementById("settTraceDurationMinutes");
+const settSavedHint = document.getElementById("settSavedHint");
+const settDbgApexCode = document.getElementById("settDbgApexCode");
+const settDbgApexProfiling = document.getElementById("settDbgApexProfiling");
+const settDbgCallout = document.getElementById("settDbgCallout");
+const settDbgDatabase = document.getElementById("settDbgDatabase");
+const settDbgSystem = document.getElementById("settDbgSystem");
+const settDbgValidation = document.getElementById("settDbgValidation");
+const settDbgVisualforce = document.getElementById("settDbgVisualforce");
+const settDbgWorkflow = document.getElementById("settDbgWorkflow");
 const extensionVersion = document.getElementById("extension-version");
 const chkSelectAllLogs = document.getElementById("chkSelectAllLogs");
 const btnClearSelected = document.getElementById("btnClearSelected");
 const btnClearAllLogs = document.getElementById("btnClearAllLogs");
 
 const FILTER_ALL = "__ALL__";
-const DEFAULT_DEBUG_LEVELS = {
-  ApexCode: "DEBUG",
-  ApexProfiling: "INFO",
-  Callout: "INFO",
-  Database: "INFO",
-  System: "DEBUG",
-  Validation: "INFO",
-  Visualforce: "INFO",
-  Workflow: "INFO",
-};
 
 let refreshTimer = null;
 let lastSfTabId = null;
@@ -75,11 +89,13 @@ async function getConfiguredDebugLevels() {
 
 async function getConfiguredTraceDurationMinutes() {
   try {
-    const cfg = await chrome.storage.sync.get({ traceDurationMinutes: 15 });
-    return Math.min(Math.max(Number(cfg.traceDurationMinutes) || 15, 5), 240);
+    const cfg = await chrome.storage.sync.get({
+      traceDurationMinutes: SETTINGS_STORAGE_DEFAULTS.traceDurationMinutes,
+    });
+    return clampTraceMinutes(cfg.traceDurationMinutes);
   } catch (error) {
     logJsError("load trace duration from settings", error);
-    return 15;
+    return SETTINGS_STORAGE_DEFAULTS.traceDurationMinutes;
   }
 }
 
@@ -849,14 +865,130 @@ userSearchInput.addEventListener("blur", () => {
   }, 120);
 });
 
-linkOptions.addEventListener("click", (e) => {
-  e.preventDefault();
-  if (chrome.runtime.openOptionsPage) {
-    chrome.runtime.openOptionsPage();
-  }
+function getSettingsDebugFieldPairs() {
+  return [
+    [settDbgApexCode, "ApexCode"],
+    [settDbgApexProfiling, "ApexProfiling"],
+    [settDbgCallout, "Callout"],
+    [settDbgDatabase, "Database"],
+    [settDbgSystem, "System"],
+    [settDbgValidation, "Validation"],
+    [settDbgVisualforce, "Visualforce"],
+    [settDbgWorkflow, "Workflow"],
+  ];
+}
+
+if (settDbgApexCode) {
+  initAllDebugLevelSelects(getSettingsDebugFieldPairs());
+}
+
+function loadSettingsOverlayFromStorage() {
+  chrome.storage.sync.get(
+    { ...SETTINGS_STORAGE_DEFAULTS, debugLevels: DEFAULT_DEBUG_LEVELS },
+    (cfg) => {
+      if (settLogLimit) settLogLimit.value = String(clampLogLimit(cfg.logLimit));
+      if (settRefreshSeconds) {
+        const v = String(
+          cfg.refreshSeconds ?? SETTINGS_STORAGE_DEFAULTS.refreshSeconds
+        );
+        const ok = [...settRefreshSeconds.options].some((o) => o.value === v);
+        settRefreshSeconds.value = ok
+          ? v
+          : String(SETTINGS_STORAGE_DEFAULTS.refreshSeconds);
+      }
+      if (settTraceDurationMinutes) {
+        const v = String(
+          cfg.traceDurationMinutes ?? SETTINGS_STORAGE_DEFAULTS.traceDurationMinutes
+        );
+        const ok = [...settTraceDurationMinutes.options].some((o) => o.value === v);
+        settTraceDurationMinutes.value = ok ? v : "15";
+      }
+      applyDebugLevelsToSelects(getSettingsDebugFieldPairs(), cfg.debugLevels);
+    }
+  );
+}
+
+function showSettingsSavedHint() {
+  if (!settSavedHint) return;
+  settSavedHint.textContent = "Saved";
+  setTimeout(() => {
+    settSavedHint.textContent = "";
+  }, 1500);
+}
+
+function saveSettingsOverlay() {
+  const logLimit = clampLogLimit(settLogLimit?.value);
+  const refreshSeconds = Number(settRefreshSeconds?.value);
+  const traceDurationMinutes = clampTraceMinutes(settTraceDurationMinutes?.value);
+  const debugLevels = readDebugLevelsFromSelects(getSettingsDebugFieldPairs());
+  chrome.storage.sync.set(
+    {
+      logLimit,
+      refreshSeconds: Number.isFinite(refreshSeconds)
+        ? refreshSeconds
+        : SETTINGS_STORAGE_DEFAULTS.refreshSeconds,
+      traceDurationMinutes,
+      debugLevels,
+    },
+    () => {
+      showSettingsSavedHint();
+      if (refreshSelect && settRefreshSeconds) {
+        const v = settRefreshSeconds.value;
+        const opt = [...refreshSelect.options].find((o) => o.value === v);
+        if (opt) refreshSelect.value = opt.value;
+      }
+      scheduleRefresh();
+    }
+  );
+}
+
+function openSettingsOverlay() {
+  if (!settingsOverlay) return;
+  loadSettingsOverlayFromStorage();
+  settingsOverlay.hidden = false;
+  setTimeout(() => btnCloseSettings?.focus(), 0);
+}
+
+function closeSettingsOverlay() {
+  if (!settingsOverlay) return;
+  settingsOverlay.hidden = true;
+  if (settSavedHint) settSavedHint.textContent = "";
+}
+
+if (btnOpenSettings) {
+  btnOpenSettings.addEventListener("click", () => openSettingsOverlay());
+}
+if (btnCloseSettings) {
+  btnCloseSettings.addEventListener("click", () => closeSettingsOverlay());
+}
+if (settingsOverlay) {
+  settingsOverlay.addEventListener("click", (e) => {
+    if (e.target === settingsOverlay) closeSettingsOverlay();
+  });
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!settingsOverlay || settingsOverlay.hidden) return;
+  closeSettingsOverlay();
 });
 
-chrome.storage.sync.get({ refreshSeconds: 15, logLimit: 50 }, async (cfg) => {
+for (const el of [
+  settLogLimit,
+  settRefreshSeconds,
+  settTraceDurationMinutes,
+  settDbgApexCode,
+  settDbgApexProfiling,
+  settDbgCallout,
+  settDbgDatabase,
+  settDbgSystem,
+  settDbgValidation,
+  settDbgVisualforce,
+  settDbgWorkflow,
+]) {
+  el?.addEventListener("change", saveSettingsOverlay);
+}
+
+chrome.storage.sync.get(SETTINGS_STORAGE_DEFAULTS, async (cfg) => {
   btnSetLog.disabled = true;
   btnRemoveLog.disabled = true;
   btnRemoveLog.title = REMOVE_LOG_TITLE_NEED_USER;
