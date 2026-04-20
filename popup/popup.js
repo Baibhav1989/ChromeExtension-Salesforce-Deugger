@@ -235,9 +235,6 @@ function userMatchesSearch(user, query) {
     String(user.username || "")
       .toLowerCase()
       .includes(q) ||
-    String(user.userType || "")
-      .toLowerCase()
-      .includes(q) ||
     String(user.id || "")
       .toLowerCase()
       .includes(q)

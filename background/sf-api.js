@@ -108,10 +108,9 @@ export async function searchUsers(apiBase, sessionId, query, limit = 100) {
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 200);
   const contains = `%${escapeSoqlLikeLiteral(trimmed)}%`;
   const soql = [
-    "SELECT Id, Name, Username, UserType",
+    "SELECT Id, Name, Username",
     "FROM User",
-    "WHERE IsActive = true",
-    `AND (Name LIKE '${contains}' OR Username LIKE '${contains}' OR UserType LIKE '${contains}')`,
+    `WHERE (Name LIKE '${contains}' OR Username LIKE '${contains}')`,
     "ORDER BY Name ASC",
     `LIMIT ${safeLimit}`,
   ].join(" ");
