@@ -258,6 +258,53 @@ export async function createTraceFlag(apiBase, sessionId, userId, debugLevelId, 
 }
 
 /**
+ * Delete a TraceFlag by Id (Tooling API).
+ * @param {string} apiBase
+ * @param {string} sessionId
+ * @param {string} traceFlagId
+ */
+export async function deleteTraceFlag(apiBase, sessionId, traceFlagId) {
+  const base = String(apiBase || "").replace(/\/+$/, "");
+  const id = encodeURIComponent(traceFlagId);
+  const path = `/services/data/${API_VERSION}/tooling/sobjects/TraceFlag/${id}`;
+  const res = await fetch(`${base}${path}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${sessionId}`,
+      Accept: "application/json",
+    },
+  });
+  if (res.status === 204 || res.ok) return;
+  const text = await res.text();
+  let body;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = { raw: text };
+  }
+  const msg =
+    body?.[0]?.message || body?.message || body?.error || text || `HTTP ${res.status}`;
+  throw new Error(String(msg));
+}
+
+/**
+ * Remove the active USER_DEBUG trace for a user, if any.
+ * @param {string} apiBase
+ * @param {string} sessionId
+ * @param {string} userId
+ * @returns {Promise<{ removed: boolean, traceFlagId?: string }>}
+ */
+export async function removeActiveUserDebugTrace(apiBase, sessionId, userId) {
+  const status = await getTraceFlagStatus(apiBase, sessionId, userId);
+  if (!status.active || !status.traceFlag?.Id) {
+    return { removed: false };
+  }
+  const traceFlagId = status.traceFlag.Id;
+  await deleteTraceFlag(apiBase, sessionId, traceFlagId);
+  return { removed: true, traceFlagId };
+}
+
+/**
  * @param {string} apiBase
  * @param {string} sessionId
  * @param {string} logId

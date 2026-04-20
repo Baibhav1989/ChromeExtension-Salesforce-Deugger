@@ -5,9 +5,16 @@ const statusBadge = document.getElementById("statusBadge");
 const traceStatus = document.getElementById("traceStatus");
 const btnRefresh = document.getElementById("btnRefresh");
 const btnSetLog = document.getElementById("btnSetLog");
+const btnRemoveLog = document.getElementById("btnRemoveLog");
 const SET_LOG_TITLE_DEFAULT = "Set trace flag for the selected user";
 const SET_LOG_TITLE_ACTIVE =
   "Debug trace is already active for this user (see message below)";
+const REMOVE_LOG_TITLE_REMOVE =
+  "Remove debug trace for this user (stop capturing new logs)";
+const REMOVE_LOG_TITLE_NEED_USER =
+  "Select a specific log user (not All) to remove a trace";
+const REMOVE_LOG_TITLE_NO_TRACE = "No active debug trace for this user";
+const REMOVE_LOG_TITLE_NEED_SF_TAB = "Open a Salesforce tab first";
 const refreshSelect = document.getElementById("refreshSelect");
 const userSearchInput = document.getElementById("userSearchInput");
 const userTypeaheadList = document.getElementById("userTypeaheadList");
@@ -310,6 +317,10 @@ function setUserSelection(id, label) {
   userSearchInput.value = selectedUserLabel === "All" ? "" : selectedUserLabel;
   btnSetLog.disabled = selectedUserId === FILTER_ALL;
   btnSetLog.title = SET_LOG_TITLE_DEFAULT;
+  if (selectedUserId === FILTER_ALL) {
+    btnRemoveLog.disabled = true;
+    btnRemoveLog.title = REMOVE_LOG_TITLE_NEED_USER;
+  }
 }
 
 async function clearPersistedDefaultTraceUser() {
@@ -549,13 +560,20 @@ async function refreshTraceStatusForSelection() {
   try {
     const userId = getSelectedUserId();
     btnSetLog.title = SET_LOG_TITLE_DEFAULT;
+    btnRemoveLog.title = REMOVE_LOG_TITLE_NO_TRACE;
     if (!userId) {
       btnSetLog.disabled = true;
+      btnRemoveLog.disabled = true;
+      btnRemoveLog.title = REMOVE_LOG_TITLE_NEED_USER;
       hideTraceStatus();
       return;
     }
     const tabId = await getSfTabId();
-    if (tabId == null) return;
+    if (tabId == null) {
+      btnRemoveLog.disabled = true;
+      btnRemoveLog.title = REMOVE_LOG_TITLE_NEED_SF_TAB;
+      return;
+    }
     lastSfTabId = tabId;
     const res = await chrome.runtime.sendMessage({
       type: "GET_TRACE_FLAG_STATUS",
@@ -565,6 +583,8 @@ async function refreshTraceStatusForSelection() {
     if (!res?.ok) {
       showTraceStatus(res?.error || "Could not read trace status.", "error");
       btnSetLog.disabled = false;
+      btnRemoveLog.disabled = true;
+      btnRemoveLog.title = REMOVE_LOG_TITLE_NO_TRACE;
       return;
     }
     if (res.active && res.expirationDate) {
@@ -572,6 +592,8 @@ async function refreshTraceStatusForSelection() {
       showTraceStatus(`Trace already active until ${formatTime(res.expirationDate)}.`, "ok");
       btnSetLog.disabled = true;
       btnSetLog.title = SET_LOG_TITLE_ACTIVE;
+      btnRemoveLog.disabled = false;
+      btnRemoveLog.title = REMOVE_LOG_TITLE_REMOVE;
       return;
     }
     if (res.expiredAt) {
@@ -581,16 +603,22 @@ async function refreshTraceStatusForSelection() {
         "warn"
       );
       btnSetLog.disabled = false;
+      btnRemoveLog.disabled = true;
+      btnRemoveLog.title = REMOVE_LOG_TITLE_NO_TRACE;
       return;
     }
     await clearPersistedDefaultTraceUserIfMatches(userId);
     showTraceStatus("No active trace for this user. Click Set Log.", "warn");
     btnSetLog.disabled = false;
+    btnRemoveLog.disabled = true;
+    btnRemoveLog.title = REMOVE_LOG_TITLE_NO_TRACE;
   } catch (error) {
     logJsError("refreshTraceStatusForSelection", error);
     showTraceStatus("Could not read trace status. Check console logs.", "error");
     const userId = getSelectedUserId();
     if (userId) btnSetLog.disabled = false;
+    btnRemoveLog.disabled = true;
+    btnRemoveLog.title = REMOVE_LOG_TITLE_NO_TRACE;
   }
 }
 
@@ -608,6 +636,7 @@ async function setTraceForSelectedUser() {
   lastSfTabId = tabId;
 
   btnSetLog.disabled = true;
+  btnRemoveLog.disabled = true;
   const oldText = btnSetLog.textContent || "Set Log";
   btnSetLog.textContent = "Setting...";
   try {
@@ -645,6 +674,56 @@ async function setTraceForSelectedUser() {
   }
 }
 
+async function removeTraceForSelectedUser() {
+  const userId = getSelectedUserId();
+  if (!userId) {
+    showTraceStatus("Select a user first, then remove trace.", "warn");
+    return;
+  }
+  if (
+    !confirm(
+      "Remove the debug trace for this user? New logs will not be captured until you set the trace again."
+    )
+  ) {
+    return;
+  }
+  const tabId = await getSfTabId();
+  if (tabId == null) {
+    showTraceStatus("Open a Salesforce tab first.", "error");
+    return;
+  }
+  lastSfTabId = tabId;
+
+  const oldText = btnRemoveLog.textContent || "Remove log";
+  btnRemoveLog.disabled = true;
+  btnSetLog.disabled = true;
+  btnRemoveLog.textContent = "Removing…";
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: "REMOVE_TRACE_FLAG",
+      tabId,
+      userId,
+    });
+    if (!res?.ok) {
+      showTraceStatus(res?.error || "Could not remove trace.", "error");
+      return;
+    }
+    if (res.removed === false) {
+      showTraceStatus(res.message || "No active trace to remove.", "warn");
+      return;
+    }
+    showTraceStatus("Debug trace removed for this user.", "ok");
+    await clearPersistedDefaultTraceUserIfMatches(userId);
+    await loadLogs();
+  } catch (error) {
+    logJsError("removeTraceForSelectedUser", error);
+    showTraceStatus("Remove trace failed. Check console.", "error");
+  } finally {
+    btnRemoveLog.textContent = oldText;
+    await refreshTraceStatusForSelection();
+  }
+}
+
 function scheduleRefresh() {
   if (refreshTimer) {
     clearInterval(refreshTimer);
@@ -665,6 +744,10 @@ btnRefresh.addEventListener("click", async () => {
 btnSetLog.addEventListener("click", async () => {
   await setTraceForSelectedUser();
   await refreshTraceStatusForSelection();
+});
+
+btnRemoveLog.addEventListener("click", async () => {
+  await removeTraceForSelectedUser();
 });
 
 refreshSelect.addEventListener("change", () => {
@@ -743,6 +826,8 @@ userSearchInput.addEventListener("input", () => {
   selectedUserLabel = "All";
   btnSetLog.disabled = true;
   btnSetLog.title = SET_LOG_TITLE_DEFAULT;
+  btnRemoveLog.disabled = true;
+  btnRemoveLog.title = REMOVE_LOG_TITLE_NEED_USER;
   renderUserOptions();
   showTypeahead();
   const query = String(userSearchInput.value || "").trim();
@@ -773,6 +858,8 @@ linkOptions.addEventListener("click", (e) => {
 
 chrome.storage.sync.get({ refreshSeconds: 15, logLimit: 50 }, async (cfg) => {
   btnSetLog.disabled = true;
+  btnRemoveLog.disabled = true;
+  btnRemoveLog.title = REMOVE_LOG_TITLE_NEED_USER;
   const v = String(cfg.refreshSeconds ?? 15);
   const opt = [...refreshSelect.options].find((o) => o.value === v);
   refreshSelect.value = opt ? opt.value : "15";

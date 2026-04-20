@@ -80,15 +80,26 @@
           />
           <div class="typeahead-list" id="userTypeaheadList" hidden></div>
         </label>
-        <button
-          type="button"
-          class="btn btn--brand btn--set-log"
-          id="btnSetLog"
-          title="Set trace flag for the selected user"
-          disabled
-        >
-          Set Log
-        </button>
+        <div class="toolbar__trace-actions">
+          <button
+            type="button"
+            class="btn btn--brand btn--set-log"
+            id="btnSetLog"
+            title="Set trace flag for the selected user"
+            disabled
+          >
+            Set Log
+          </button>
+          <button
+            type="button"
+            class="btn btn--destructive btn--remove-log"
+            id="btnRemoveLog"
+            title="No active debug trace for this user"
+            disabled
+          >
+            Remove log
+          </button>
+        </div>
       </div>
     </div>
     <p class="hint hint--status" id="traceStatus" hidden></p>

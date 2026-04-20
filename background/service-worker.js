@@ -8,6 +8,7 @@ import {
   listActiveUsers,
   listApexLogs,
   queryAllApexLogIds,
+  removeActiveUserDebugTrace,
   searchUsers,
 } from "./sf-api.js";
 
@@ -79,6 +80,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .then(sendResponse)
       .catch((e) => {
         logJsError("SET_TRACE_FLAG", e);
+        sendResponse({ ok: false, error: e?.message || String(e) });
+      });
+    return true;
+  }
+  if (message?.type === "REMOVE_TRACE_FLAG") {
+    handleRemoveTraceFlag(message.tabId, message.userId)
+      .then(sendResponse)
+      .catch((e) => {
+        logJsError("REMOVE_TRACE_FLAG", e);
         sendResponse({ ok: false, error: e?.message || String(e) });
       });
     return true;
@@ -247,6 +257,29 @@ async function handleGetTraceFlagStatus(tabId, userId) {
     expirationDate: status.traceFlag?.ExpirationDate || null,
     expiredAt: status.expiredTraceFlag?.ExpirationDate || null,
   };
+}
+
+async function handleRemoveTraceFlag(tabId, userId) {
+  if (!userId) return { ok: false, error: "Missing user id." };
+  const resolved = await resolveSessionFromActiveTab(tabId);
+  if (!resolved.ok) return resolved;
+  try {
+    const result = await removeActiveUserDebugTrace(
+      resolved.session.apiBase,
+      resolved.session.sessionId,
+      userId
+    );
+    if (!result.removed) {
+      return {
+        ok: true,
+        removed: false,
+        message: "No active debug trace for this user.",
+      };
+    }
+    return { ok: true, removed: true };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
 
 async function handleSetTraceFlag(tabId, userId, durationMinutes, debugLevels) {
