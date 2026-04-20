@@ -24,11 +24,27 @@
     <section class="summary" id="summary" hidden>
       <div class="summary__grid">
         <div class="pill"><span class="pill__label">Total lines</span> <span id="sumLines">—</span></div>
-        <div class="pill"><span class="pill__label">Shown (filters)</span> <span id="sumShown">—</span></div>
         <div class="pill"><span class="pill__label">SOQL events</span> <span id="sumSoql">—</span></div>
-        <div class="pill pill--danger"><span class="pill__label">Errors</span> <span id="sumErrors">—</span></div>
+        <button
+          type="button"
+          class="pill pill--danger pill--clickable"
+          id="pillErrorsBtn"
+          aria-label="Jump to errors in the filtered log"
+        >
+          <span class="pill__label">Errors</span> <span id="sumErrors">—</span>
+        </button>
       </div>
     </section>
+
+    <div class="error-nav-flyout" id="errorNavFlyout" hidden>
+      <button type="button" class="error-nav-flyout__btn" id="errorNavPrev" aria-label="Previous error">
+        ← Prev
+      </button>
+      <span class="error-nav-flyout__pos" id="errorNavPosition" aria-live="polite"></span>
+      <button type="button" class="error-nav-flyout__btn" id="errorNavNext" aria-label="Next error">
+        Next →
+      </button>
+    </div>
 
     <main class="log-main" id="logMain" hidden>
       <div class="log-filters" id="logFilters" role="group" aria-label="Log line filters">

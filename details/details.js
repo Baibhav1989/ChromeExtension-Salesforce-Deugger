@@ -1,6 +1,6 @@
-import { collectErrors } from "../lib/log-errors.js";
 import {
   filterLogLines,
+  isExceptionsOnlyFilter,
   loadLogFilters,
   parseDebugLog,
   renderLogTableHtml,
@@ -38,9 +38,13 @@ const summary = document.getElementById("summary");
 const logMain = document.getElementById("logMain");
 const logTableHost = document.getElementById("logTableHost");
 const sumLines = document.getElementById("sumLines");
-const sumShown = document.getElementById("sumShown");
 const sumSoql = document.getElementById("sumSoql");
 const sumErrors = document.getElementById("sumErrors");
+const pillErrorsBtn = document.getElementById("pillErrorsBtn");
+const errorNavFlyout = document.getElementById("errorNavFlyout");
+const errorNavPrev = document.getElementById("errorNavPrev");
+const errorNavNext = document.getElementById("errorNavNext");
+const errorNavPosition = document.getElementById("errorNavPosition");
 const btnCopy = document.getElementById("btnCopy");
 const btnReload = document.getElementById("btnReload");
 const btnClose = document.getElementById("btnClose");
@@ -55,6 +59,10 @@ const filterVariable = document.getElementById("filterVariable");
 let rawText = "";
 /** @type {any} */
 let lastParsed = null;
+
+/** @type {HTMLElement[]} */
+let errorNavNodes = [];
+let errorNavIndex = 0;
 
 if (extensionVersion) {
   extensionVersion.textContent = `v${chrome.runtime.getManifest().version}`;
@@ -85,13 +93,53 @@ function syncMasterCategoryCheckbox() {
   filterAll.indeterminate = Boolean(anyOn && !allOn);
 }
 
+function collectErrorRowElements() {
+  return Array.from(
+    logTableHost.querySelectorAll('tr[id^="log-error-row-"]')
+  );
+}
+
+function updateErrorSummaryAndNav() {
+  errorNavNodes = collectErrorRowElements();
+  const n = errorNavNodes.length;
+  sumErrors.textContent = String(n);
+  if (pillErrorsBtn) {
+    pillErrorsBtn.disabled = n === 0;
+  }
+  errorNavFlyout.hidden = true;
+  errorNavIndex = 0;
+  if (errorNavPosition) {
+    errorNavPosition.textContent = "";
+  }
+}
+
+function updateErrorNavLabel() {
+  const n = errorNavNodes.length;
+  if (!errorNavPosition) return;
+  if (n === 0) {
+    errorNavPosition.textContent = "";
+    return;
+  }
+  errorNavPosition.textContent = `${errorNavIndex + 1} / ${n}`;
+}
+
+function scrollToErrorIndex(i) {
+  if (i < 0 || i >= errorNavNodes.length) return;
+  const el = errorNavNodes[i];
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  errorNavIndex = i;
+  updateErrorNavLabel();
+}
+
 function applyFiltersAndRender() {
   if (!lastParsed) return;
   const filters = readFiltersFromUi();
   saveLogFilters(filters);
   const filtered = filterLogLines(lastParsed.lines, filters);
-  sumShown.textContent = String(filtered.length);
-  logTableHost.innerHTML = renderLogTableHtml(filtered);
+  logTableHost.innerHTML = renderLogTableHtml(filtered, {
+    emphasizeExceptions: isExceptionsOnlyFilter(filters),
+  });
+  updateErrorSummaryAndNav();
 }
 
 filterAll.addEventListener("change", () => {
@@ -110,6 +158,32 @@ for (const id of CATEGORY_FILTER_IDS) {
     applyFiltersAndRender();
   });
 }
+
+pillErrorsBtn.addEventListener("click", () => {
+  errorNavNodes = collectErrorRowElements();
+  const n = errorNavNodes.length;
+  sumErrors.textContent = String(n);
+  if (n === 0) return;
+  errorNavIndex = 0;
+  scrollToErrorIndex(0);
+  if (n > 1) {
+    errorNavFlyout.hidden = false;
+  } else {
+    errorNavFlyout.hidden = true;
+  }
+});
+
+errorNavPrev.addEventListener("click", () => {
+  if (errorNavNodes.length <= 1) return;
+  const prev = (errorNavIndex - 1 + errorNavNodes.length) % errorNavNodes.length;
+  scrollToErrorIndex(prev);
+});
+
+errorNavNext.addEventListener("click", () => {
+  if (errorNavNodes.length <= 1) return;
+  const next = (errorNavIndex + 1) % errorNavNodes.length;
+  scrollToErrorIndex(next);
+});
 
 function showLoading(show) {
   bannerLoading.hidden = !show;
@@ -157,7 +231,6 @@ async function fetchLog() {
 
   sumLines.textContent = String(parsed.lines.length);
   sumSoql.textContent = String(parsed.summary.soql);
-  sumErrors.textContent = String(collectErrors(parsed).length);
   summary.hidden = false;
 
   applyFiltersToUi(loadLogFilters());
