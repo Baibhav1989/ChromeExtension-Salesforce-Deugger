@@ -23,7 +23,8 @@
 
     <section class="summary" id="summary" hidden>
       <div class="summary__grid">
-        <div class="pill"><span class="pill__label">Lines</span> <span id="sumLines">—</span></div>
+        <div class="pill"><span class="pill__label">Total lines</span> <span id="sumLines">—</span></div>
+        <div class="pill"><span class="pill__label">Shown (filters)</span> <span id="sumShown">—</span></div>
         <div class="pill"><span class="pill__label">SOQL events</span> <span id="sumSoql">—</span></div>
         <div class="pill pill--danger"><span class="pill__label">Errors</span> <span id="sumErrors">—</span></div>
       </div>
@@ -35,7 +36,26 @@
     </section>
 
     <main class="log-main" id="logMain" hidden>
-      <div class="log-scroll" id="logScroll"></div>
+      <div class="log-filters" id="logFilters" role="group" aria-label="Log line filters">
+        <span class="log-filters__title">Show categories</span>
+        <label class="log-filters__item">
+          <input type="checkbox" id="filterDebug" checked data-cat="debug" />
+          Debug <span class="log-filters__hint">(USER_DEBUG)</span>
+        </label>
+        <label class="log-filters__item">
+          <input type="checkbox" id="filterException" checked data-cat="exception" />
+          Exceptions
+        </label>
+        <label class="log-filters__item">
+          <input type="checkbox" id="filterQuery" checked data-cat="query" />
+          Queries <span class="log-filters__hint">(SOQL)</span>
+        </label>
+        <label class="log-filters__item">
+          <input type="checkbox" id="filterVariable" checked data-cat="variable" />
+          Variable assignment
+        </label>
+      </div>
+      <div class="log-table-host" id="logTableHost"></div>
     </main>
 
     <script type="module" src="details.js"></script>

@@ -1,5 +1,11 @@
 import { collectErrors } from "../lib/log-errors.js";
-import { parseDebugLog, renderLogHtml } from "../lib/log-formatter.js";
+import {
+  filterLogLines,
+  loadLogFilters,
+  parseDebugLog,
+  renderLogTableHtml,
+  saveLogFilters,
+} from "../lib/log-formatter.js";
 
 const params = new URLSearchParams(window.location.search);
 const logId = params.get("logId");
@@ -12,15 +18,52 @@ const summary = document.getElementById("summary");
 const errorPanel = document.getElementById("errorPanel");
 const errorList = document.getElementById("errorList");
 const logMain = document.getElementById("logMain");
-const logScroll = document.getElementById("logScroll");
+const logTableHost = document.getElementById("logTableHost");
 const sumLines = document.getElementById("sumLines");
+const sumShown = document.getElementById("sumShown");
 const sumSoql = document.getElementById("sumSoql");
 const sumErrors = document.getElementById("sumErrors");
 const btnCopy = document.getElementById("btnCopy");
 const btnReload = document.getElementById("btnReload");
 const btnClose = document.getElementById("btnClose");
 
+const filterDebug = document.getElementById("filterDebug");
+const filterException = document.getElementById("filterException");
+const filterQuery = document.getElementById("filterQuery");
+const filterVariable = document.getElementById("filterVariable");
+
 let rawText = "";
+/** @type {any} */
+let lastParsed = null;
+
+function readFiltersFromUi() {
+  return {
+    debug: filterDebug.checked,
+    exception: filterException.checked,
+    query: filterQuery.checked,
+    variable: filterVariable.checked,
+  };
+}
+
+function applyFiltersToUi(saved) {
+  filterDebug.checked = saved.debug;
+  filterException.checked = saved.exception;
+  filterQuery.checked = saved.query;
+  filterVariable.checked = saved.variable;
+}
+
+function applyFiltersAndRender() {
+  if (!lastParsed) return;
+  const filters = readFiltersFromUi();
+  saveLogFilters(filters);
+  const filtered = filterLogLines(lastParsed.lines, filters);
+  sumShown.textContent = String(filtered.length);
+  logTableHost.innerHTML = renderLogTableHtml(filtered);
+}
+
+for (const el of [filterDebug, filterException, filterQuery, filterVariable]) {
+  el.addEventListener("change", () => applyFiltersAndRender());
+}
 
 function showLoading(show) {
   bannerLoading.hidden = !show;
@@ -66,6 +109,7 @@ async function fetchLog() {
 
   rawText = res.body || "";
   const parsed = parseDebugLog(rawText);
+  lastParsed = parsed;
 
   sumLines.textContent = String(parsed.lines.length);
   sumSoql.textContent = String(parsed.summary.soql);
@@ -89,7 +133,8 @@ async function fetchLog() {
     errorList.innerHTML = "";
   }
 
-  logScroll.innerHTML = renderLogHtml(parsed.lines);
+  applyFiltersToUi(loadLogFilters());
+  applyFiltersAndRender();
   logMain.hidden = false;
 }
 
