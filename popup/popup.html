@@ -41,57 +41,11 @@
           <option value="__ALL__" selected>All</option>
         </select>
       </label>
-      <label class="field">
-        <span>Trace time</span>
-        <select id="traceDurationSelect" aria-label="Trace duration">
-          <option value="15" selected>15 min</option>
-          <option value="30">30 min</option>
-          <option value="60">60 min</option>
-          <option value="120">120 min</option>
-        </select>
-      </label>
-      <button type="button" class="btn btn--ghost" id="btnSetLog" title="Set trace flag">
+      <button type="button" class="btn btn--brand" id="btnSetLog" title="Set trace flag">
         Set Log
       </button>
     </div>
     <p class="hint hint--status" id="traceStatus" hidden></p>
-    <section class="debug-levels" aria-label="Debug level settings">
-      <div class="debug-levels__title">Debug Level (all types)</div>
-      <div class="debug-levels__grid">
-        <label class="debug-field">
-          <span>Apex Code</span>
-          <select id="dbgApexCode"></select>
-        </label>
-        <label class="debug-field">
-          <span>Apex Profiling</span>
-          <select id="dbgApexProfiling"></select>
-        </label>
-        <label class="debug-field">
-          <span>Callout</span>
-          <select id="dbgCallout"></select>
-        </label>
-        <label class="debug-field">
-          <span>Database</span>
-          <select id="dbgDatabase"></select>
-        </label>
-        <label class="debug-field">
-          <span>System</span>
-          <select id="dbgSystem"></select>
-        </label>
-        <label class="debug-field">
-          <span>Validation</span>
-          <select id="dbgValidation"></select>
-        </label>
-        <label class="debug-field">
-          <span>Visualforce</span>
-          <select id="dbgVisualforce"></select>
-        </label>
-        <label class="debug-field">
-          <span>Workflow</span>
-          <select id="dbgWorkflow"></select>
-        </label>
-      </div>
-    </section>
 
     <div class="list-wrap">
       <ul class="log-list" id="logList"></ul>

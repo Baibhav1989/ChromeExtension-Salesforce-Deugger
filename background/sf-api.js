@@ -87,9 +87,8 @@ export async function listApexLogs(apiBase, sessionId, limit, logUserId = null) 
 export async function listActiveUsers(apiBase, sessionId, limit = 500) {
   const safeLimit = Math.min(Math.max(Number(limit) || 500, 1), 2000);
   const soql = [
-    "SELECT Id, Name, Username, IsActive",
+    "SELECT Id, Name, Username",
     "FROM User",
-    "WHERE IsActive = true",
     "ORDER BY Name ASC",
     `LIMIT ${safeLimit}`,
   ].join(" ");

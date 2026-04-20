@@ -41,6 +41,33 @@
         margin-top: 12px;
         min-height: 18px;
       }
+      .section-title {
+        margin-top: 22px;
+        font-size: 16px;
+      }
+      .debug-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+        gap: 0 16px;
+      }
+      .label-with-info {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .info-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        border: 1px solid #c4cdd8;
+        font-size: 11px;
+        color: #5a6b82;
+        cursor: help;
+        user-select: none;
+      }
     </style>
   </head>
   <body>
@@ -61,6 +88,53 @@
       <option value="30">30</option>
       <option value="60">60</option>
     </select>
+
+    <label for="traceDurationMinutes" class="label-with-info">
+      <span>Trace duration for Set Log (minutes)</span>
+      <span
+        class="info-chip"
+        title="When you click Set Log in popup, Trace Flag expiration is set for this duration."
+        aria-label="Trace duration info"
+        >i</span
+      >
+    </label>
+    <select id="traceDurationMinutes">
+      <option value="15">15</option>
+      <option value="30">30</option>
+      <option value="60">60</option>
+      <option value="120">120</option>
+      <option value="240">240</option>
+    </select>
+
+    <h2 class="section-title">Debug Level Defaults</h2>
+    <p>
+      These levels are used when you click <strong>Set Log</strong> in popup for a selected user.
+    </p>
+    <div class="debug-grid">
+      <label for="dbgApexCode">Apex Code</label>
+      <select id="dbgApexCode"></select>
+
+      <label for="dbgApexProfiling">Apex Profiling</label>
+      <select id="dbgApexProfiling"></select>
+
+      <label for="dbgCallout">Callout</label>
+      <select id="dbgCallout"></select>
+
+      <label for="dbgDatabase">Database</label>
+      <select id="dbgDatabase"></select>
+
+      <label for="dbgSystem">System</label>
+      <select id="dbgSystem"></select>
+
+      <label for="dbgValidation">Validation</label>
+      <select id="dbgValidation"></select>
+
+      <label for="dbgVisualforce">Visualforce</label>
+      <select id="dbgVisualforce"></select>
+
+      <label for="dbgWorkflow">Workflow</label>
+      <select id="dbgWorkflow"></select>
+    </div>
 
     <div class="saved" id="saved"></div>
 

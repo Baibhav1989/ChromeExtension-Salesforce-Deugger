@@ -7,6 +7,19 @@ import {
   saveLogFilters,
 } from "../lib/log-formatter.js";
 
+function logJsError(context, error) {
+  const message = error?.stack || error?.message || String(error);
+  console.log(`[SF Debugger][${context}] ${message}`, error);
+}
+
+window.addEventListener("error", (event) => {
+  logJsError("details error", event.error || event.message);
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  logJsError("details unhandled rejection", event.reason);
+});
+
 const params = new URLSearchParams(window.location.search);
 const logId = params.get("logId");
 const tabIdParam = params.get("tabId");
@@ -154,7 +167,8 @@ btnCopy.addEventListener("click", async () => {
     setTimeout(() => {
       btnCopy.textContent = "Copy raw log";
     }, 1500);
-  } catch {
+  } catch (error) {
+    logJsError("copy raw log", error);
     btnCopy.textContent = "Copy failed";
   }
 });

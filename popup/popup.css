@@ -87,6 +87,18 @@ body {
   color: var(--accent);
 }
 
+.btn--brand {
+  background: #0176d3;
+  border-color: #0176d3;
+  color: #ffffff;
+}
+
+.btn--brand:hover {
+  background: #025fb2;
+  border-color: #025fb2;
+  color: #ffffff;
+}
+
 .hint {
   margin: 10px 14px;
   color: var(--muted);
@@ -138,39 +150,6 @@ select {
 
 .hint--status.hint--error {
   color: var(--danger);
-}
-
-.debug-levels {
-  margin: 0 14px 8px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-
-.debug-levels__title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-
-.debug-levels__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 8px;
-}
-
-.debug-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.debug-field select {
-  width: 100%;
 }
 
 .list-wrap {

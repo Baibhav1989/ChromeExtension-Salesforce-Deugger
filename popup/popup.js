@@ -6,29 +6,10 @@ const traceStatus = document.getElementById("traceStatus");
 const btnRefresh = document.getElementById("btnRefresh");
 const btnSetLog = document.getElementById("btnSetLog");
 const refreshSelect = document.getElementById("refreshSelect");
-const traceDurationSelect = document.getElementById("traceDurationSelect");
 const userFilterSelect = document.getElementById("userFilterSelect");
 const linkOptions = document.getElementById("linkOptions");
-const dbgApexCode = document.getElementById("dbgApexCode");
-const dbgApexProfiling = document.getElementById("dbgApexProfiling");
-const dbgCallout = document.getElementById("dbgCallout");
-const dbgDatabase = document.getElementById("dbgDatabase");
-const dbgSystem = document.getElementById("dbgSystem");
-const dbgValidation = document.getElementById("dbgValidation");
-const dbgVisualforce = document.getElementById("dbgVisualforce");
-const dbgWorkflow = document.getElementById("dbgWorkflow");
 
 const FILTER_ALL = "__ALL__";
-const DEBUG_LEVEL_VALUES = [
-  "NONE",
-  "ERROR",
-  "WARN",
-  "INFO",
-  "DEBUG",
-  "FINE",
-  "FINER",
-  "FINEST",
-];
 const DEFAULT_DEBUG_LEVELS = {
   ApexCode: "DEBUG",
   ApexProfiling: "INFO",
@@ -43,40 +24,37 @@ const DEFAULT_DEBUG_LEVELS = {
 let refreshTimer = null;
 let lastSfTabId = null;
 
-function initDebugLevelControls() {
-  const fields = [
-    [dbgApexCode, "ApexCode"],
-    [dbgApexProfiling, "ApexProfiling"],
-    [dbgCallout, "Callout"],
-    [dbgDatabase, "Database"],
-    [dbgSystem, "System"],
-    [dbgValidation, "Validation"],
-    [dbgVisualforce, "Visualforce"],
-    [dbgWorkflow, "Workflow"],
-  ];
-  for (const [el, key] of fields) {
-    el.innerHTML = "";
-    for (const level of DEBUG_LEVEL_VALUES) {
-      const opt = document.createElement("option");
-      opt.value = level;
-      opt.textContent = level;
-      if (DEFAULT_DEBUG_LEVELS[key] === level) opt.selected = true;
-      el.appendChild(opt);
-    }
+function logJsError(context, error) {
+  const message = error?.stack || error?.message || String(error);
+  console.log(`[SF Debugger][${context}] ${message}`, error);
+}
+
+window.addEventListener("error", (event) => {
+  logJsError("popup error", event.error || event.message);
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  logJsError("popup unhandled rejection", event.reason);
+});
+
+async function getConfiguredDebugLevels() {
+  try {
+    const cfg = await chrome.storage.sync.get({ debugLevels: DEFAULT_DEBUG_LEVELS });
+    return { ...DEFAULT_DEBUG_LEVELS, ...(cfg.debugLevels || {}) };
+  } catch (error) {
+    logJsError("load debug levels from settings", error);
+    return { ...DEFAULT_DEBUG_LEVELS };
   }
 }
 
-function getSelectedDebugLevels() {
-  return {
-    ApexCode: dbgApexCode.value || DEFAULT_DEBUG_LEVELS.ApexCode,
-    ApexProfiling: dbgApexProfiling.value || DEFAULT_DEBUG_LEVELS.ApexProfiling,
-    Callout: dbgCallout.value || DEFAULT_DEBUG_LEVELS.Callout,
-    Database: dbgDatabase.value || DEFAULT_DEBUG_LEVELS.Database,
-    System: dbgSystem.value || DEFAULT_DEBUG_LEVELS.System,
-    Validation: dbgValidation.value || DEFAULT_DEBUG_LEVELS.Validation,
-    Visualforce: dbgVisualforce.value || DEFAULT_DEBUG_LEVELS.Visualforce,
-    Workflow: dbgWorkflow.value || DEFAULT_DEBUG_LEVELS.Workflow,
-  };
+async function getConfiguredTraceDurationMinutes() {
+  try {
+    const cfg = await chrome.storage.sync.get({ traceDurationMinutes: 15 });
+    return Math.min(Math.max(Number(cfg.traceDurationMinutes) || 15, 5), 240);
+  } catch (error) {
+    logJsError("load trace duration from settings", error);
+    return 15;
+  }
 }
 
 function isSfUrl(url) {
@@ -244,76 +222,93 @@ function renderUserOptions(users) {
 }
 
 async function loadActiveUsers() {
-  const tabId = await getSfTabId();
-  if (tabId == null) return;
-  lastSfTabId = tabId;
-  const res = await chrome.runtime.sendMessage({ type: "LIST_ACTIVE_USERS", tabId });
-  if (!res?.ok) {
-    showTraceStatus(res?.error || "Could not load active users.", "error");
-    return;
+  try {
+    const tabId = await getSfTabId();
+    if (tabId == null) return;
+    lastSfTabId = tabId;
+    const res = await chrome.runtime.sendMessage({ type: "LIST_ACTIVE_USERS", tabId });
+    if (!res?.ok) {
+      showTraceStatus(res?.error || "Could not load active users.", "error");
+      return;
+    }
+    renderUserOptions(res.users || []);
+  } catch (error) {
+    logJsError("loadActiveUsers", error);
+    showTraceStatus("Could not load users. Check console logs.", "error");
   }
-  renderUserOptions(res.users || []);
 }
 
 async function loadLogs() {
-  hideError();
-  const tabId = await getSfTabId();
-  lastSfTabId = tabId;
-  if (tabId == null) {
-    showError(
-      "No Salesforce tab found. Open Lightning, Setup, or your org in another tab."
-    );
-    clearList();
-    setBadge("", false);
-    return;
-  }
+  try {
+    hideError();
+    const tabId = await getSfTabId();
+    lastSfTabId = tabId;
+    if (tabId == null) {
+      showError(
+        "No Salesforce tab found. Open Lightning, Setup, or your org in another tab."
+      );
+      clearList();
+      setBadge("", false);
+      return;
+    }
 
-  setBadge("Loading…", false);
-  const logUserId = getSelectedUserId();
-  const res = await chrome.runtime.sendMessage({ type: "LIST_LOGS", tabId, logUserId });
+    setBadge("Loading…", false);
+    const logUserId = getSelectedUserId();
+    const res = await chrome.runtime.sendMessage({ type: "LIST_LOGS", tabId, logUserId });
 
-  if (!res?.ok) {
-    showError(res?.error || "Failed to load logs.");
+    if (!res?.ok) {
+      showError(res?.error || "Failed to load logs.");
+      clearList();
+      setBadge("Error", false);
+      return;
+    }
+
+    hideError();
+    renderRecords(res.records || []);
+  } catch (error) {
+    logJsError("loadLogs", error);
+    showError("Failed to load logs. Check console logs.");
     clearList();
     setBadge("Error", false);
-    return;
   }
-
-  hideError();
-  renderRecords(res.records || []);
 }
 
 async function refreshTraceStatusForSelection() {
-  const userId = getSelectedUserId();
-  btnSetLog.disabled = !userId;
-  if (!userId) {
-    hideTraceStatus();
-    return;
+  try {
+    const userId = getSelectedUserId();
+    btnSetLog.disabled = !userId;
+    if (!userId) {
+      hideTraceStatus();
+      return;
+    }
+    const tabId = await getSfTabId();
+    if (tabId == null) return;
+    lastSfTabId = tabId;
+    const res = await chrome.runtime.sendMessage({
+      type: "GET_TRACE_FLAG_STATUS",
+      tabId,
+      userId,
+    });
+    if (!res?.ok) {
+      showTraceStatus(res?.error || "Could not read trace status.", "error");
+      return;
+    }
+    if (res.active && res.expirationDate) {
+      showTraceStatus(`Trace already active until ${formatTime(res.expirationDate)}.`, "ok");
+      return;
+    }
+    if (res.expiredAt) {
+      showTraceStatus(
+        `Trace expired at ${formatTime(res.expiredAt)}. Click Set Log to enable again.`,
+        "warn"
+      );
+      return;
+    }
+    showTraceStatus("No active trace for this user. Click Set Log.", "warn");
+  } catch (error) {
+    logJsError("refreshTraceStatusForSelection", error);
+    showTraceStatus("Could not read trace status. Check console logs.", "error");
   }
-  const tabId = await getSfTabId();
-  if (tabId == null) return;
-  lastSfTabId = tabId;
-  const res = await chrome.runtime.sendMessage({
-    type: "GET_TRACE_FLAG_STATUS",
-    tabId,
-    userId,
-  });
-  if (!res?.ok) {
-    showTraceStatus(res?.error || "Could not read trace status.", "error");
-    return;
-  }
-  if (res.active && res.expirationDate) {
-    showTraceStatus(`Trace already active until ${formatTime(res.expirationDate)}.`, "ok");
-    return;
-  }
-  if (res.expiredAt) {
-    showTraceStatus(
-      `Trace expired at ${formatTime(res.expiredAt)}. Click Set Log to enable again.`,
-      "warn"
-    );
-    return;
-  }
-  showTraceStatus("No active trace for this user. Click Set Log.", "warn");
 }
 
 async function setTraceForSelectedUser() {
@@ -330,35 +325,41 @@ async function setTraceForSelectedUser() {
   lastSfTabId = tabId;
 
   btnSetLog.disabled = true;
-  const oldText = btnSetLog.textContent;
-  btnSetLog.textContent = "Setting…";
-  const res = await chrome.runtime.sendMessage({
-    type: "SET_TRACE_FLAG",
-    tabId,
-    userId,
-    durationMinutes: Number(traceDurationSelect.value) || 15,
-    debugLevels: getSelectedDebugLevels(),
-  });
-  btnSetLog.textContent = oldText;
-  btnSetLog.disabled = false;
+  const oldText = btnSetLog.textContent || "Set Log";
+  btnSetLog.textContent = "Setting...";
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: "SET_TRACE_FLAG",
+      tabId,
+      userId,
+      durationMinutes: await getConfiguredTraceDurationMinutes(),
+      debugLevels: await getConfiguredDebugLevels(),
+    });
 
-  if (!res?.ok) {
-    showTraceStatus(res?.error || "Failed to set trace flag.", "error");
-    return;
-  }
+    if (!res?.ok) {
+      showTraceStatus(res?.error || "Failed to set trace flag for selected user.", "error");
+      return;
+    }
 
-  if (res.alreadyActive) {
-    showTraceStatus(
-      `Trace already exists and is active until ${formatTime(res.expirationDate)}.`,
-      "ok"
-    );
-  } else {
-    showTraceStatus(
-      `Trace enabled until ${formatTime(res.expirationDate)} for selected user.`,
-      "ok"
-    );
+    if (res.alreadyActive) {
+      showTraceStatus(
+        `Trace already exists and is active until ${formatTime(res.expirationDate)}.`,
+        "ok"
+      );
+    } else {
+      showTraceStatus(
+        `Trace enabled until ${formatTime(res.expirationDate)} for selected user.`,
+        "ok"
+      );
+    }
+    await loadLogs();
+  } catch (error) {
+    logJsError("setTraceForSelectedUser", error);
+    showTraceStatus("Failed to set trace flag for selected user. Check console logs.", "error");
+  } finally {
+    btnSetLog.textContent = oldText;
+    btnSetLog.disabled = false;
   }
-  await loadLogs();
 }
 
 function scheduleRefresh() {
@@ -402,7 +403,6 @@ linkOptions.addEventListener("click", (e) => {
 
 chrome.storage.sync.get({ refreshSeconds: 15, logLimit: 50 }, async (cfg) => {
   btnSetLog.disabled = true;
-  initDebugLevelControls();
   const v = String(cfg.refreshSeconds ?? 15);
   const opt = [...refreshSelect.options].find((o) => o.value === v);
   refreshSelect.value = opt ? opt.value : "15";

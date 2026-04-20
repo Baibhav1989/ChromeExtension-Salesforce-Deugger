@@ -8,7 +8,20 @@ import {
   listApexLogs,
 } from "./sf-api.js";
 
-const DEFAULTS = { logLimit: 50, refreshSeconds: 15 };
+const DEFAULTS = { logLimit: 50, refreshSeconds: 15, traceDurationMinutes: 15 };
+
+function logJsError(context, error) {
+  const message = error?.stack || error?.message || String(error);
+  console.log(`[SF Debugger][${context}] ${message}`, error);
+}
+
+self.addEventListener("error", (event) => {
+  logJsError("service-worker error", event.error || event.message);
+});
+
+self.addEventListener("unhandledrejection", (event) => {
+  logJsError("service-worker unhandled rejection", event.reason);
+});
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(DEFAULTS, (stored) => {
@@ -20,19 +33,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "LIST_LOGS") {
     handleListLogs(message.tabId, message.logUserId)
       .then(sendResponse)
-      .catch((e) => sendResponse({ ok: false, error: e?.message || String(e) }));
+      .catch((e) => {
+        logJsError("LIST_LOGS", e);
+        sendResponse({ ok: false, error: e?.message || String(e) });
+      });
     return true;
   }
   if (message?.type === "LIST_ACTIVE_USERS") {
     handleListActiveUsers(message.tabId)
       .then(sendResponse)
-      .catch((e) => sendResponse({ ok: false, error: e?.message || String(e) }));
+      .catch((e) => {
+        logJsError("LIST_ACTIVE_USERS", e);
+        sendResponse({ ok: false, error: e?.message || String(e) });
+      });
     return true;
   }
   if (message?.type === "GET_TRACE_FLAG_STATUS") {
     handleGetTraceFlagStatus(message.tabId, message.userId)
       .then(sendResponse)
-      .catch((e) => sendResponse({ ok: false, error: e?.message || String(e) }));
+      .catch((e) => {
+        logJsError("GET_TRACE_FLAG_STATUS", e);
+        sendResponse({ ok: false, error: e?.message || String(e) });
+      });
     return true;
   }
   if (message?.type === "SET_TRACE_FLAG") {
@@ -43,13 +65,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       message.debugLevels
     )
       .then(sendResponse)
-      .catch((e) => sendResponse({ ok: false, error: e?.message || String(e) }));
+      .catch((e) => {
+        logJsError("SET_TRACE_FLAG", e);
+        sendResponse({ ok: false, error: e?.message || String(e) });
+      });
     return true;
   }
   if (message?.type === "GET_LOG_BODY") {
     handleGetLogBody(message.tabId, message.logId)
       .then(sendResponse)
-      .catch((e) => sendResponse({ ok: false, error: e?.message || String(e) }));
+      .catch((e) => {
+        logJsError("GET_LOG_BODY", e);
+        sendResponse({ ok: false, error: e?.message || String(e) });
+      });
     return true;
   }
   return false;
