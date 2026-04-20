@@ -119,7 +119,7 @@ export async function resolveSession(tabUrl) {
 }
 
 /**
- * Same check as Apex Coverage Viewer detectApiVersion — unversioned /services/data/.
+ * Same check  detectApiVersion — unversioned /services/data/.
  * @param {string} apiBase
  * @param {string} sessionId
  */
