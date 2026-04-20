@@ -7,6 +7,7 @@ const btnRefresh = document.getElementById("btnRefresh");
 const btnSetLog = document.getElementById("btnSetLog");
 const refreshSelect = document.getElementById("refreshSelect");
 const userFilterSelect = document.getElementById("userFilterSelect");
+const userSearchInput = document.getElementById("userSearchInput");
 const linkOptions = document.getElementById("linkOptions");
 
 const FILTER_ALL = "__ALL__";
@@ -23,6 +24,7 @@ const DEFAULT_DEBUG_LEVELS = {
 
 let refreshTimer = null;
 let lastSfTabId = null;
+let allUsers = [];
 
 function logJsError(context, error) {
   const message = error?.stack || error?.message || String(error);
@@ -197,11 +199,33 @@ function renderRecords(records) {
 
 function formatUserLabel(user) {
   const type = user.userType ? ` (${user.userType})` : "";
-  return `${user.name}${type}`;
+  const username = user.username ? ` - ${user.username}` : "";
+  return `${user.name}${type}${username}`;
 }
 
-function renderUserOptions(users) {
+function userMatchesSearch(user, query) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return (
+    String(user.name || "")
+      .toLowerCase()
+      .includes(q) ||
+    String(user.username || "")
+      .toLowerCase()
+      .includes(q) ||
+    String(user.userType || "")
+      .toLowerCase()
+      .includes(q) ||
+    String(user.id || "")
+      .toLowerCase()
+      .includes(q)
+  );
+}
+
+function renderUserOptions() {
   const previous = userFilterSelect.value || FILTER_ALL;
+  const query = String(userSearchInput.value || "").trim();
+  const visibleUsers = allUsers.filter((u) => userMatchesSearch(u, query));
   userFilterSelect.innerHTML = "";
 
   const allOption = document.createElement("option");
@@ -209,7 +233,7 @@ function renderUserOptions(users) {
   allOption.textContent = "All";
   userFilterSelect.appendChild(allOption);
 
-  for (const user of users) {
+  for (const user of visibleUsers) {
     const opt = document.createElement("option");
     opt.value = user.id;
     opt.textContent = formatUserLabel(user);
@@ -217,7 +241,19 @@ function renderUserOptions(users) {
   }
 
   const exists = [...userFilterSelect.options].some((opt) => opt.value === previous);
-  userFilterSelect.value = exists ? previous : FILTER_ALL;
+  if (!exists && previous !== FILTER_ALL) {
+    const selectedUser = allUsers.find((u) => u.id === previous);
+    if (selectedUser) {
+      const opt = document.createElement("option");
+      opt.value = selectedUser.id;
+      opt.textContent = `${formatUserLabel(selectedUser)} (selected)`;
+      userFilterSelect.appendChild(opt);
+    }
+  }
+  const existsAfterRestore = [...userFilterSelect.options].some(
+    (opt) => opt.value === previous
+  );
+  userFilterSelect.value = existsAfterRestore ? previous : FILTER_ALL;
   btnSetLog.disabled = userFilterSelect.value === FILTER_ALL;
 }
 
@@ -231,7 +267,8 @@ async function loadActiveUsers() {
       showTraceStatus(res?.error || "Could not load active users.", "error");
       return;
     }
-    renderUserOptions(res.users || []);
+    allUsers = res.users || [];
+    renderUserOptions();
   } catch (error) {
     logJsError("loadActiveUsers", error);
     showTraceStatus("Could not load users. Check console logs.", "error");
@@ -392,6 +429,10 @@ refreshSelect.addEventListener("change", () => {
 userFilterSelect.addEventListener("change", async () => {
   await loadLogs();
   await refreshTraceStatusForSelection();
+});
+
+userSearchInput.addEventListener("input", () => {
+  renderUserOptions();
 });
 
 linkOptions.addEventListener("click", (e) => {

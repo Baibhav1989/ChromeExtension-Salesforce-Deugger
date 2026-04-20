@@ -130,9 +130,29 @@ select {
   font-size: 12px;
 }
 
+input {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.field--user {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .field--user select {
   min-width: 150px;
   max-width: 200px;
+}
+
+.field--user input {
+  min-width: 170px;
+  max-width: 220px;
 }
 
 .hint--status {

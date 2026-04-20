@@ -11,7 +11,7 @@
         background: #f4f6f9;
       }
       body {
-        max-width: 520px;
+        max-width: 780px;
         margin: 40px auto;
         padding: 0 20px;
       }
@@ -20,13 +20,11 @@
       }
       label {
         display: block;
-        margin: 16px 0 6px;
         font-weight: 600;
       }
       input,
       select {
         width: 100%;
-        max-width: 280px;
         padding: 8px 10px;
         border-radius: 6px;
         border: 1px solid #c4cdd8;
@@ -45,15 +43,30 @@
         margin-top: 22px;
         font-size: 16px;
       }
+      .form-grid {
+        display: grid;
+        gap: 12px;
+        max-width: 560px;
+      }
+      .form-row {
+        display: grid;
+        gap: 6px;
+      }
       .debug-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(220px, 1fr));
-        gap: 0 16px;
+        grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr);
+        gap: 8px 16px;
+        max-width: 640px;
       }
       .label-with-info {
         display: inline-flex;
         align-items: center;
         gap: 6px;
+      }
+      .debug-label {
+        display: flex;
+        align-items: center;
+        min-height: 38px;
       }
       .info-chip {
         display: inline-flex;
@@ -77,62 +90,70 @@
       and permission to view Apex debug logs for your user.
     </p>
 
-    <label for="logLimit">Logs to fetch (max 200)</label>
-    <input type="number" id="logLimit" min="1" max="200" />
+    <div class="form-grid">
+      <div class="form-row">
+        <label for="logLimit">Logs to fetch (max 200)</label>
+        <input type="number" id="logLimit" min="1" max="200" />
+      </div>
 
-    <label for="refreshSeconds">Default auto-refresh interval (seconds)</label>
-    <select id="refreshSeconds">
-      <option value="0">Manual only</option>
-      <option value="10">10</option>
-      <option value="15">15</option>
-      <option value="30">30</option>
-      <option value="60">60</option>
-    </select>
+      <div class="form-row">
+        <label for="refreshSeconds">Default auto-refresh interval (seconds)</label>
+        <select id="refreshSeconds">
+          <option value="0">Manual only</option>
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="30">30</option>
+          <option value="60">60</option>
+        </select>
+      </div>
 
-    <label for="traceDurationMinutes" class="label-with-info">
-      <span>Trace duration for Set Log (minutes)</span>
-      <span
-        class="info-chip"
-        title="When you click Set Log in popup, Trace Flag expiration is set for this duration."
-        aria-label="Trace duration info"
-        >i</span
-      >
-    </label>
-    <select id="traceDurationMinutes">
-      <option value="15">15</option>
-      <option value="30">30</option>
-      <option value="60">60</option>
-      <option value="120">120</option>
-      <option value="240">240</option>
-    </select>
+      <div class="form-row">
+        <label for="traceDurationMinutes" class="label-with-info">
+          <span>Trace duration for Set Log (minutes)</span>
+          <span
+            class="info-chip"
+            title="When you click Set Log in popup, Trace Flag expiration is set for this duration."
+            aria-label="Trace duration info"
+            >i</span
+          >
+        </label>
+        <select id="traceDurationMinutes">
+          <option value="15">15</option>
+          <option value="30">30</option>
+          <option value="60">60</option>
+          <option value="120">120</option>
+          <option value="240">240</option>
+        </select>
+      </div>
+    </div>
 
     <h2 class="section-title">Debug Level Defaults</h2>
     <p>
       These levels are used when you click <strong>Set Log</strong> in popup for a selected user.
     </p>
     <div class="debug-grid">
-      <label for="dbgApexCode">Apex Code</label>
+      <label class="debug-label" for="dbgApexCode">Apex Code</label>
       <select id="dbgApexCode"></select>
 
-      <label for="dbgApexProfiling">Apex Profiling</label>
+      <label class="debug-label" for="dbgApexProfiling">Apex Profiling</label>
       <select id="dbgApexProfiling"></select>
 
-      <label for="dbgCallout">Callout</label>
+      <label class="debug-label" for="dbgCallout">Callout</label>
       <select id="dbgCallout"></select>
 
-      <label for="dbgDatabase">Database</label>
+      <label class="debug-label" for="dbgDatabase">Database</label>
       <select id="dbgDatabase"></select>
 
-      <label for="dbgSystem">System</label>
+      <label class="debug-label" for="dbgSystem">System</label>
       <select id="dbgSystem"></select>
 
-      <label for="dbgValidation">Validation</label>
+      <label class="debug-label" for="dbgValidation">Validation</label>
       <select id="dbgValidation"></select>
 
-      <label for="dbgVisualforce">Visualforce</label>
+      <label class="debug-label" for="dbgVisualforce">Visualforce</label>
       <select id="dbgVisualforce"></select>
 
-      <label for="dbgWorkflow">Workflow</label>
+      <label class="debug-label" for="dbgWorkflow">Workflow</label>
       <select id="dbgWorkflow"></select>
     </div>
 
