@@ -105,6 +105,12 @@ function isOptimizedView() {
   return chkOptimizeLog.checked;
 }
 
+function syncDetailsPageLayoutFlags() {
+  const optimized = isOptimizedView();
+  document.body.classList.toggle("details-page--optimized", optimized);
+  document.body.classList.toggle("details-page--raw", !optimized);
+}
+
 function readFiltersFromUi() {
   return {
     debug: filterDebug.checked,
@@ -249,6 +255,7 @@ function applyFiltersAndRender() {
 }
 
 function applyViewMode() {
+  syncDetailsPageLayoutFlags();
   if (!lastParsed || !logMain) return;
   const optimized = isOptimizedView();
   persistOptimizeLogPreference(optimized);

@@ -1,5 +1,8 @@
 :root {
   color-scheme: light dark;
+  /* Fixed footer strip — approximate row + padding (see .extension-footer) */
+  --details-footer-height: 52px;
+  --details-footer-stack-gap: 10px;
   --bg: #0c1017;
   --surface: #121a24;
   --border: #243044;
@@ -36,13 +39,32 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+}
+
 body {
   margin: 0;
+  min-height: 100%;
+  min-height: 100vh;
   font-family: var(--font);
   font-size: 13px;
   line-height: 1.45;
   color: var(--text);
   background: var(--bg);
+  box-sizing: border-box;
+}
+
+/* Raw log: fixed footer — pad scrollable area */
+body.details-page--raw {
+  padding-bottom: calc(
+    var(--details-footer-height) + env(safe-area-inset-bottom, 0px)
+  );
+}
+
+/* Optimized log: footer in document flow at end of page */
+body.details-page--optimized {
+  padding-bottom: 0;
 }
 
 .topbar {
@@ -210,7 +232,6 @@ body {
 .error-nav-flyout {
   position: fixed;
   left: 50%;
-  bottom: 52px;
   transform: translateX(-50%);
   z-index: 50;
   display: flex;
@@ -221,6 +242,17 @@ body {
   border: 1px solid rgba(255, 120, 120, 0.4);
   background: var(--surface);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+body.details-page--raw .error-nav-flyout {
+  bottom: calc(
+    var(--details-footer-height) + env(safe-area-inset-bottom, 0px) +
+      var(--details-footer-stack-gap)
+  );
+}
+
+body.details-page--optimized .error-nav-flyout {
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }
 
 .error-nav-flyout__btn {
@@ -250,7 +282,6 @@ body {
 .soql-nav-flyout {
   position: fixed;
   left: 50%;
-  bottom: 52px;
   transform: translateX(-50%);
   z-index: 50;
   display: flex;
@@ -261,6 +292,17 @@ body {
   border: 1px solid rgba(92, 230, 193, 0.45);
   background: var(--surface);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+body.details-page--raw .soql-nav-flyout {
+  bottom: calc(
+    var(--details-footer-height) + env(safe-area-inset-bottom, 0px) +
+      var(--details-footer-stack-gap)
+  );
+}
+
+body.details-page--optimized .soql-nav-flyout {
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }
 
 .soql-nav-flyout__btn {
@@ -299,6 +341,10 @@ body {
 
 .log-main {
   margin: 0 18px 24px;
+}
+
+body.details-page--optimized .log-main {
+  margin-bottom: 0;
 }
 
 .log-filters {
@@ -783,12 +829,32 @@ body {
 
 .extension-footer {
   margin: 0;
-  padding: 6px 10px;
+  padding: 8px 12px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #1f1f1f;
   background: #000000;
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+body.details-page--raw .extension-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.35);
+}
+
+body.details-page--optimized .extension-footer {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  z-index: auto;
+  margin-top: 28px;
+  box-shadow: none;
 }
 
 .footer-content {
@@ -799,14 +865,10 @@ body {
   justify-content: center;
   color: #f2f2f2;
   font-size: 12px;
-  white-space: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
+  white-space: normal;
+  text-align: center;
+  overflow: visible;
   max-width: 100%;
-}
-
-.footer-content::-webkit-scrollbar {
-  display: none;
 }
 
 .footer-text {
