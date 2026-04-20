@@ -95,6 +95,29 @@ export async function listActiveUsers(apiBase, sessionId, limit = 500) {
   return toolingQuery(apiBase, sessionId, soql);
 }
 
+function escapeSoqlLikeLiteral(value) {
+  return String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/[%_]/g, "\\$&");
+}
+
+export async function searchUsers(apiBase, sessionId, query, limit = 100) {
+  const trimmed = String(query || "").trim();
+  if (trimmed.length < 3) return { records: [] };
+  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 200);
+  const contains = `%${escapeSoqlLikeLiteral(trimmed)}%`;
+  const soql = [
+    "SELECT Id, Name, Username, UserType",
+    "FROM User",
+    "WHERE IsActive = true",
+    `AND (Name LIKE '${contains}' OR Username LIKE '${contains}' OR UserType LIKE '${contains}')`,
+    "ORDER BY Name ASC",
+    `LIMIT ${safeLimit}`,
+  ].join(" ");
+  return toolingQuery(apiBase, sessionId, soql);
+}
+
 function toSfDateTimeIso(date) {
   return new Date(date).toISOString().replace(/\.\d{3}Z$/, "Z");
 }

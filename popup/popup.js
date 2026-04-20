@@ -27,6 +27,10 @@ let lastSfTabId = null;
 let allUsers = [];
 let selectedUserId = FILTER_ALL;
 let selectedUserLabel = "All";
+let userSearchDebounceTimer = null;
+let userSearchRequestSeq = 0;
+const MIN_REMOTE_USER_SEARCH_LENGTH = 3;
+const DEFAULT_TRACE_USER_KEY = "defaultTraceUserSelection";
 
 function logJsError(context, error) {
   const message = error?.stack || error?.message || String(error);
@@ -202,6 +206,25 @@ function formatUserLabel(user) {
   return user.name || user.username || user.id;
 }
 
+function mergeUsersById(baseUsers, extraUsers) {
+  const merged = new Map();
+  for (const user of [...(baseUsers || []), ...(extraUsers || [])]) {
+    if (!user?.id) continue;
+    merged.set(user.id, {
+      id: user.id,
+      name: user.name || user.username || user.id,
+      username: user.username || "",
+      userType: user.userType || "",
+      isAutomatedProcess: Boolean(user.isAutomatedProcess),
+    });
+  }
+  return [...merged.values()].sort((a, b) => {
+    if (a.isAutomatedProcess && !b.isAutomatedProcess) return -1;
+    if (!a.isAutomatedProcess && b.isAutomatedProcess) return 1;
+    return formatUserLabel(a).localeCompare(formatUserLabel(b), undefined, { sensitivity: "base" });
+  });
+}
+
 function userMatchesSearch(user, query) {
   if (!query) return true;
   const q = query.toLowerCase();
@@ -234,6 +257,63 @@ function setUserSelection(id, label) {
   selectedUserLabel = label || "All";
   userSearchInput.value = selectedUserLabel === "All" ? "" : selectedUserLabel;
   btnSetLog.disabled = selectedUserId === FILTER_ALL;
+}
+
+async function clearPersistedDefaultTraceUser() {
+  try {
+    await chrome.storage.local.remove(DEFAULT_TRACE_USER_KEY);
+  } catch (error) {
+    logJsError("clearPersistedDefaultTraceUser", error);
+  }
+}
+
+async function persistDefaultTraceUser(userId, userLabel, expirationDate) {
+  const expiresAtMs = Date.parse(expirationDate || "");
+  if (!userId || !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+    await clearPersistedDefaultTraceUser();
+    return;
+  }
+  try {
+    await chrome.storage.local.set({
+      [DEFAULT_TRACE_USER_KEY]: {
+        userId: String(userId),
+        userLabel: String(userLabel || userId),
+        expiresAt: new Date(expiresAtMs).toISOString(),
+      },
+    });
+  } catch (error) {
+    logJsError("persistDefaultTraceUser", error);
+  }
+}
+
+async function clearPersistedDefaultTraceUserIfMatches(userId) {
+  if (!userId) return;
+  try {
+    const stored = await chrome.storage.local.get({ [DEFAULT_TRACE_USER_KEY]: null });
+    if (stored?.[DEFAULT_TRACE_USER_KEY]?.userId === userId) {
+      await chrome.storage.local.remove(DEFAULT_TRACE_USER_KEY);
+    }
+  } catch (error) {
+    logJsError("clearPersistedDefaultTraceUserIfMatches", error);
+  }
+}
+
+async function restoreDefaultTraceUserSelection() {
+  try {
+    const stored = await chrome.storage.local.get({ [DEFAULT_TRACE_USER_KEY]: null });
+    const pref = stored?.[DEFAULT_TRACE_USER_KEY];
+    if (!pref?.userId || !pref?.expiresAt) return false;
+    const expiresAtMs = Date.parse(pref.expiresAt);
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+      await chrome.storage.local.remove(DEFAULT_TRACE_USER_KEY);
+      return false;
+    }
+    setUserSelection(pref.userId, pref.userLabel || pref.userId);
+    return true;
+  } catch (error) {
+    logJsError("restoreDefaultTraceUserSelection", error);
+    return false;
+  }
 }
 
 async function applyUserSelectionAndRefresh(id, label) {
@@ -272,6 +352,16 @@ function renderUserOptions() {
     userTypeaheadList.appendChild(item);
   }
 
+  if (visibleUsers.length === 0) {
+    const emptyItem = document.createElement("div");
+    emptyItem.className = "typeahead-item";
+    emptyItem.textContent =
+      query.length >= MIN_REMOTE_USER_SEARCH_LENGTH
+        ? "No users found."
+        : `Type at least ${MIN_REMOTE_USER_SEARCH_LENGTH} characters to search all users.`;
+    userTypeaheadList.appendChild(emptyItem);
+  }
+
   if (!query && selectedUserId === FILTER_ALL) {
     userSearchInput.placeholder = "All";
   }
@@ -287,12 +377,41 @@ async function loadActiveUsers() {
       showTraceStatus(res?.error || "Could not load active users.", "error");
       return;
     }
-    allUsers = res.users || [];
+    allUsers = mergeUsersById(allUsers, res.users || []);
     setUserSelection(selectedUserId, selectedUserLabel);
     renderUserOptions();
   } catch (error) {
     logJsError("loadActiveUsers", error);
     showTraceStatus("Could not load users. Check console logs.", "error");
+  }
+}
+
+async function searchUsersByQuery(rawQuery) {
+  const query = String(rawQuery || "").trim();
+  if (query.length < MIN_REMOTE_USER_SEARCH_LENGTH) return;
+  const requestSeq = ++userSearchRequestSeq;
+  try {
+    const tabId = await getSfTabId();
+    if (tabId == null) return;
+    lastSfTabId = tabId;
+    const res = await chrome.runtime.sendMessage({
+      type: "SEARCH_USERS",
+      tabId,
+      query,
+      limit: 100,
+    });
+    if (requestSeq !== userSearchRequestSeq) return;
+    if (!res?.ok) {
+      showTraceStatus(res?.error || "Could not search users.", "error");
+      return;
+    }
+    allUsers = mergeUsersById(allUsers, res.users || []);
+    renderUserOptions();
+  } catch (error) {
+    logJsError("searchUsersByQuery", error);
+    if (requestSeq === userSearchRequestSeq) {
+      showTraceStatus("Could not search users. Check console logs.", "error");
+    }
   }
 }
 
@@ -352,16 +471,19 @@ async function refreshTraceStatusForSelection() {
       return;
     }
     if (res.active && res.expirationDate) {
+      await persistDefaultTraceUser(userId, selectedUserLabel, res.expirationDate);
       showTraceStatus(`Trace already active until ${formatTime(res.expirationDate)}.`, "ok");
       return;
     }
     if (res.expiredAt) {
+      await clearPersistedDefaultTraceUserIfMatches(userId);
       showTraceStatus(
         `Trace expired at ${formatTime(res.expiredAt)}. Click Set Log to enable again.`,
         "warn"
       );
       return;
     }
+    await clearPersistedDefaultTraceUserIfMatches(userId);
     showTraceStatus("No active trace for this user. Click Set Log.", "warn");
   } catch (error) {
     logJsError("refreshTraceStatusForSelection", error);
@@ -410,6 +532,7 @@ async function setTraceForSelectedUser() {
         "ok"
       );
     }
+    await persistDefaultTraceUser(userId, selectedUserLabel, res.expirationDate);
     await loadLogs();
   } catch (error) {
     logJsError("setTraceForSelectedUser", error);
@@ -453,6 +576,12 @@ userSearchInput.addEventListener("input", () => {
   btnSetLog.disabled = true;
   renderUserOptions();
   showTypeahead();
+  const query = String(userSearchInput.value || "").trim();
+  if (userSearchDebounceTimer) clearTimeout(userSearchDebounceTimer);
+  if (query.length < MIN_REMOTE_USER_SEARCH_LENGTH) return;
+  userSearchDebounceTimer = setTimeout(() => {
+    searchUsersByQuery(query);
+  }, 220);
 });
 
 userSearchInput.addEventListener("focus", () => {
@@ -478,6 +607,7 @@ chrome.storage.sync.get({ refreshSeconds: 15, logLimit: 50 }, async (cfg) => {
   const v = String(cfg.refreshSeconds ?? 15);
   const opt = [...refreshSelect.options].find((o) => o.value === v);
   refreshSelect.value = opt ? opt.value : "15";
+  await restoreDefaultTraceUserSelection();
   await loadActiveUsers();
   await loadLogs();
   await refreshTraceStatusForSelection();

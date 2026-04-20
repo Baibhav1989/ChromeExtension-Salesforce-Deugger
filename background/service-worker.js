@@ -6,6 +6,7 @@ import {
   getTraceFlagStatus,
   listActiveUsers,
   listApexLogs,
+  searchUsers,
 } from "./sf-api.js";
 
 const DEFAULTS = { logLimit: 50, refreshSeconds: 15, traceDurationMinutes: 15 };
@@ -44,6 +45,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .then(sendResponse)
       .catch((e) => {
         logJsError("LIST_ACTIVE_USERS", e);
+        sendResponse({ ok: false, error: e?.message || String(e) });
+      });
+    return true;
+  }
+  if (message?.type === "SEARCH_USERS") {
+    handleSearchUsers(message.tabId, message.query, message.limit)
+      .then(sendResponse)
+      .catch((e) => {
+        logJsError("SEARCH_USERS", e);
         sendResponse({ ok: false, error: e?.message || String(e) });
       });
     return true;
@@ -170,6 +180,32 @@ async function handleListActiveUsers(tabId) {
   if (!resolved.ok) return resolved;
 
   const data = await listActiveUsers(resolved.session.apiBase, resolved.session.sessionId);
+  const users = (data.records || []).map((u) => ({
+    id: u.Id,
+    name: u.Name || u.Username || u.Id,
+    username: u.Username || "",
+    userType: u.UserType || "",
+    isAutomatedProcess: String(u.Name || "").toLowerCase() === "automated process",
+  }));
+  users.sort((a, b) => {
+    if (a.isAutomatedProcess && !b.isAutomatedProcess) return -1;
+    if (!a.isAutomatedProcess && b.isAutomatedProcess) return 1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  });
+  return { ok: true, users };
+}
+
+async function handleSearchUsers(tabId, query, limit) {
+  const trimmed = String(query || "").trim();
+  if (trimmed.length < 3) return { ok: true, users: [] };
+  const resolved = await resolveSessionFromActiveTab(tabId);
+  if (!resolved.ok) return resolved;
+  const data = await searchUsers(
+    resolved.session.apiBase,
+    resolved.session.sessionId,
+    trimmed,
+    limit
+  );
   const users = (data.records || []).map((u) => ({
     id: u.Id,
     name: u.Name || u.Username || u.Id,
