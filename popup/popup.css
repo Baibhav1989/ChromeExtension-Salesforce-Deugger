@@ -39,7 +39,7 @@ body {
 
 .header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 12px 14px;
@@ -67,6 +67,55 @@ body {
   display: flex;
   gap: 6px;
   align-items: center;
+  padding-top: 2px;
+}
+
+.footer-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.header-footer-content {
+  margin-top: 2px;
+}
+
+.footer-text {
+  color: inherit;
+}
+
+.footer-divider {
+  color: var(--muted);
+}
+
+.linkedin-link,
+.trailhead-link {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  text-decoration: none;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.linkedin-link:hover,
+.trailhead-link:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.linkedin-link svg,
+.trailhead-link svg {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
 }
 
 .btn {

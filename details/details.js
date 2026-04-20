@@ -39,6 +39,7 @@ const sumErrors = document.getElementById("sumErrors");
 const btnCopy = document.getElementById("btnCopy");
 const btnReload = document.getElementById("btnReload");
 const btnClose = document.getElementById("btnClose");
+const extensionVersion = document.getElementById("extension-version");
 
 const filterDebug = document.getElementById("filterDebug");
 const filterException = document.getElementById("filterException");
@@ -48,6 +49,10 @@ const filterVariable = document.getElementById("filterVariable");
 let rawText = "";
 /** @type {any} */
 let lastParsed = null;
+
+if (extensionVersion) {
+  extensionVersion.textContent = `v${chrome.runtime.getManifest().version}`;
+}
 
 function readFiltersFromUi() {
   return {

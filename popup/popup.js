@@ -9,6 +9,7 @@ const refreshSelect = document.getElementById("refreshSelect");
 const userSearchInput = document.getElementById("userSearchInput");
 const userTypeaheadList = document.getElementById("userTypeaheadList");
 const linkOptions = document.getElementById("linkOptions");
+const extensionVersion = document.getElementById("extension-version");
 
 const FILTER_ALL = "__ALL__";
 const DEFAULT_DEBUG_LEVELS = {
@@ -31,6 +32,10 @@ let userSearchDebounceTimer = null;
 let userSearchRequestSeq = 0;
 const MIN_REMOTE_USER_SEARCH_LENGTH = 3;
 const DEFAULT_TRACE_USER_KEY = "defaultTraceUserSelection";
+
+if (extensionVersion) {
+  extensionVersion.textContent = `v${chrome.runtime.getManifest().version}`;
+}
 
 function logJsError(context, error) {
   const message = error?.stack || error?.message || String(error);
