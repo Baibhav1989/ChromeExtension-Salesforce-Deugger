@@ -87,6 +87,7 @@ async function handleListLogs(tabId) {
       location: r.Location,
       logLength: r.LogLength,
       logUserId: r.LogUserId,
+      logUserName: r.LogUser?.Name || null,
       operation: r.Operation,
       request: r.Request,
       status: r.Status,

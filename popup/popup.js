@@ -4,10 +4,15 @@ const errorState = document.getElementById("errorState");
 const statusBadge = document.getElementById("statusBadge");
 const btnRefresh = document.getElementById("btnRefresh");
 const refreshSelect = document.getElementById("refreshSelect");
+const userFilterSelect = document.getElementById("userFilterSelect");
 const linkOptions = document.getElementById("linkOptions");
+
+const FILTER_ALL = "__ALL__";
+const FILTER_AUTOMATED_PROCESS = "__AUTOMATED_PROCESS__";
 
 let refreshTimer = null;
 let lastSfTabId = null;
+let allRecords = [];
 
 function isSfUrl(url) {
   if (!url) return false;
@@ -51,6 +56,111 @@ function clearList() {
   logList.innerHTML = "";
 }
 
+function createUserFilterOptions(records) {
+  const users = new Map();
+  for (const r of records) {
+    const name = (r.logUserName || "").trim();
+    const id = (r.logUserId || "").trim();
+    if (!name && !id) continue;
+    if (name.toLowerCase() === "automated process") continue;
+    const key = id ? `id:${id}` : `name:${name.toLowerCase()}`;
+    if (!users.has(key)) {
+      users.set(key, name || id);
+    }
+  }
+
+  const sortedUsers = [...users.entries()].sort((a, b) =>
+    a[1].localeCompare(b[1], undefined, { sensitivity: "base" })
+  );
+
+  return [
+    { value: FILTER_ALL, label: "All" },
+    { value: FILTER_AUTOMATED_PROCESS, label: "Automated Process" },
+    ...sortedUsers.map(([value, label]) => ({ value, label })),
+  ];
+}
+
+function renderUserFilterOptions(records) {
+  const previous = userFilterSelect.value || FILTER_ALL;
+  const options = createUserFilterOptions(records);
+  userFilterSelect.innerHTML = "";
+  for (const option of options) {
+    const el = document.createElement("option");
+    el.value = option.value;
+    el.textContent = option.label;
+    userFilterSelect.appendChild(el);
+  }
+
+  const canKeepPrevious = options.some((option) => option.value === previous);
+  userFilterSelect.value = canKeepPrevious ? previous : FILTER_ALL;
+}
+
+function filterRecords(records) {
+  const selected = userFilterSelect.value || FILTER_ALL;
+  if (selected === FILTER_ALL) return records;
+  if (selected === FILTER_AUTOMATED_PROCESS) {
+    return records.filter(
+      (r) => (r.logUserName || "").trim().toLowerCase() === "automated process"
+    );
+  }
+  if (selected.startsWith("id:")) {
+    const selectedId = selected.slice(3);
+    return records.filter((r) => (r.logUserId || "") === selectedId);
+  }
+  if (selected.startsWith("name:")) {
+    const selectedName = selected.slice(5);
+    return records.filter(
+      (r) => (r.logUserName || "").trim().toLowerCase() === selectedName
+    );
+  }
+  return records;
+}
+
+function renderVisibleRecords(visibleRecords) {
+  const badgeText =
+    visibleRecords.length === allRecords.length
+      ? `${allRecords.length} logs`
+      : `${visibleRecords.length}/${allRecords.length} logs`;
+  setBadge(badgeText, true);
+
+  emptyState.textContent = allRecords.length
+    ? "No logs for selected user."
+    : "No logs loaded yet.";
+  emptyState.hidden = visibleRecords.length > 0;
+  clearList();
+
+  for (const r of visibleRecords) {
+    const li = document.createElement("li");
+    li.className = "log-item";
+    li.dataset.logId = r.id;
+
+    const statusClass =
+      (r.status || "").toLowerCase() === "success"
+        ? "log-item__status--success"
+        : "log-item__status--fail";
+
+    li.innerHTML = `
+      <div class="log-item__top">
+        <span class="log-item__time">${escapeHtml(formatTime(r.startTime))}</span>
+        <span class="log-item__status ${statusClass}">${escapeHtml(r.status || "—")}</span>
+      </div>
+      <div class="log-item__meta">
+        <div><strong>Operation:</strong> ${escapeHtml(r.operation || "—")}</div>
+        <div><strong>Application:</strong> ${escapeHtml(r.application || "—")}</div>
+        <div><strong>User:</strong> ${escapeHtml(r.logUserName || r.logUserId || "—")}</div>
+        <div><strong>Duration:</strong> ${escapeHtml(
+          r.durationMs != null ? `${r.durationMs} ms` : "—"
+        )} · <strong>Size:</strong> ${escapeHtml(
+      r.logLength != null ? String(r.logLength) : "—"
+    )}</div>
+      </div>
+    `;
+
+    li.addEventListener("click", () => openDetail(r.id));
+    logList.appendChild(li);
+  }
+}
+
 function showError(msg) {
   errorState.textContent = msg;
   errorState.hidden = false;
@@ -80,6 +190,8 @@ async function loadLogs() {
       "No Salesforce tab found. Open Lightning, Setup, or your org in another tab."
     );
     clearList();
+    allRecords = [];
+    renderUserFilterOptions(allRecords);
     setBadge("", false);
     return;
   }
@@ -90,51 +202,16 @@ async function loadLogs() {
   if (!res?.ok) {
     showError(res?.error || "Failed to load logs.");
     clearList();
+    allRecords = [];
+    renderUserFilterOptions(allRecords);
     setBadge("Error", false);
     return;
   }
 
   hideError();
-  setBadge(`${res.records.length} logs`, true);
-
-  if (!res.records.length) {
-    emptyState.hidden = false;
-    clearList();
-    return;
-  }
-
-  emptyState.hidden = true;
-  clearList();
-
-  for (const r of res.records) {
-    const li = document.createElement("li");
-    li.className = "log-item";
-    li.dataset.logId = r.id;
-
-    const statusClass =
-      (r.status || "").toLowerCase() === "success"
-        ? "log-item__status--success"
-        : "log-item__status--fail";
-
-    li.innerHTML = `
-      <div class="log-item__top">
-        <span class="log-item__time">${escapeHtml(formatTime(r.startTime))}</span>
-        <span class="log-item__status ${statusClass}">${escapeHtml(r.status || "—")}</span>
-      </div>
-      <div class="log-item__meta">
-        <div><strong>Operation:</strong> ${escapeHtml(r.operation || "—")}</div>
-        <div><strong>Application:</strong> ${escapeHtml(r.application || "—")}</div>
-        <div><strong>Duration:</strong> ${escapeHtml(
-          r.durationMs != null ? `${r.durationMs} ms` : "—"
-        )} · <strong>Size:</strong> ${escapeHtml(
-      r.logLength != null ? String(r.logLength) : "—"
-    )}</div>
-      </div>
-    `;
-
-    li.addEventListener("click", () => openDetail(r.id));
-    logList.appendChild(li);
-  }
+  allRecords = res.records || [];
+  renderUserFilterOptions(allRecords);
+  renderVisibleRecords(filterRecords(allRecords));
 }
 
 function escapeHtml(s) {
@@ -169,6 +246,9 @@ btnRefresh.addEventListener("click", () => loadLogs());
 refreshSelect.addEventListener("change", () => {
   chrome.storage.sync.set({ refreshSeconds: Number(refreshSelect.value) });
   scheduleRefresh();
+});
+userFilterSelect.addEventListener("change", () => {
+  renderVisibleRecords(filterRecords(allRecords));
 });
 
 linkOptions.addEventListener("click", (e) => {

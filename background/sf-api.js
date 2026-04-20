@@ -42,7 +42,7 @@ export async function listApexLogs(apiBase, sessionId, limit) {
   const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
   const soql = [
     "SELECT Id, Application, DurationMilliseconds, Location, LogLength,",
-    "LogUserId, Operation, Request, Status, StartTime",
+    "LogUserId, LogUser.Name, Operation, Request, Status, StartTime",
     "FROM ApexLog",
     "ORDER BY StartTime DESC",
     `LIMIT ${safeLimit}`,
