@@ -7,6 +7,13 @@ import {
   saveLogFilters,
 } from "../lib/log-formatter.js";
 
+const CATEGORY_FILTER_IDS = [
+  "filterDebug",
+  "filterException",
+  "filterQuery",
+  "filterVariable",
+];
+
 function logJsError(context, error) {
   const message = error?.stack || error?.message || String(error);
   console.log(`[SF Debugger][${context}] ${message}`, error);
@@ -28,8 +35,6 @@ const tabId = tabIdParam != null && tabIdParam !== "" ? Number(tabIdParam) : und
 const bannerLoading = document.getElementById("bannerLoading");
 const bannerError = document.getElementById("bannerError");
 const summary = document.getElementById("summary");
-const errorPanel = document.getElementById("errorPanel");
-const errorList = document.getElementById("errorList");
 const logMain = document.getElementById("logMain");
 const logTableHost = document.getElementById("logTableHost");
 const sumLines = document.getElementById("sumLines");
@@ -41,6 +46,7 @@ const btnReload = document.getElementById("btnReload");
 const btnClose = document.getElementById("btnClose");
 const extensionVersion = document.getElementById("extension-version");
 
+const filterAll = document.getElementById("filterAll");
 const filterDebug = document.getElementById("filterDebug");
 const filterException = document.getElementById("filterException");
 const filterQuery = document.getElementById("filterQuery");
@@ -68,6 +74,15 @@ function applyFiltersToUi(saved) {
   filterException.checked = saved.exception;
   filterQuery.checked = saved.query;
   filterVariable.checked = saved.variable;
+  syncMasterCategoryCheckbox();
+}
+
+function syncMasterCategoryCheckbox() {
+  const f = readFiltersFromUi();
+  const allOn = f.debug && f.exception && f.query && f.variable;
+  const anyOn = f.debug || f.exception || f.query || f.variable;
+  filterAll.checked = allOn;
+  filterAll.indeterminate = Boolean(anyOn && !allOn);
 }
 
 function applyFiltersAndRender() {
@@ -79,8 +94,21 @@ function applyFiltersAndRender() {
   logTableHost.innerHTML = renderLogTableHtml(filtered);
 }
 
-for (const el of [filterDebug, filterException, filterQuery, filterVariable]) {
-  el.addEventListener("change", () => applyFiltersAndRender());
+filterAll.addEventListener("change", () => {
+  const on = filterAll.checked;
+  filterDebug.checked = on;
+  filterException.checked = on;
+  filterQuery.checked = on;
+  filterVariable.checked = on;
+  filterAll.indeterminate = false;
+  applyFiltersAndRender();
+});
+
+for (const id of CATEGORY_FILTER_IDS) {
+  document.getElementById(id).addEventListener("change", () => {
+    syncMasterCategoryCheckbox();
+    applyFiltersAndRender();
+  });
 }
 
 function showLoading(show) {
@@ -91,7 +119,6 @@ function showError(msg) {
   bannerError.textContent = msg;
   bannerError.hidden = false;
   summary.hidden = true;
-  errorPanel.hidden = true;
   logMain.hidden = true;
 }
 
@@ -109,7 +136,6 @@ async function fetchLog() {
   showLoading(true);
   hideErrorBanner();
   summary.hidden = true;
-  errorPanel.hidden = true;
   logMain.hidden = true;
 
   const res = await chrome.runtime.sendMessage({
@@ -134,34 +160,9 @@ async function fetchLog() {
   sumErrors.textContent = String(collectErrors(parsed).length);
   summary.hidden = false;
 
-  const errs = collectErrors(parsed);
-  if (errs.length) {
-    errorPanel.hidden = false;
-    errorList.innerHTML = "";
-    for (const e of errs) {
-      const li = document.createElement("li");
-      li.className = "error-item";
-      li.innerHTML = `<div class="error-item__meta">Line ${e.index}${
-        e.time ? ` · ${escapeHtml(e.time)}` : ""
-      } · ${escapeHtml(e.event)}</div>${escapeHtml(e.text)}`;
-      errorList.appendChild(li);
-    }
-  } else {
-    errorPanel.hidden = true;
-    errorList.innerHTML = "";
-  }
-
   applyFiltersToUi(loadLogFilters());
   applyFiltersAndRender();
   logMain.hidden = false;
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 btnCopy.addEventListener("click", async () => {

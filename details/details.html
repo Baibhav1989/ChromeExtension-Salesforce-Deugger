@@ -30,14 +30,13 @@
       </div>
     </section>
 
-    <section class="error-panel" id="errorPanel" hidden>
-      <h2 class="section-title">Errors &amp; exceptions</h2>
-      <ul class="error-list" id="errorList"></ul>
-    </section>
-
     <main class="log-main" id="logMain" hidden>
       <div class="log-filters" id="logFilters" role="group" aria-label="Log line filters">
         <span class="log-filters__title">Show categories</span>
+        <label class="log-filters__item log-filters__item--all">
+          <input type="checkbox" id="filterAll" checked />
+          All
+        </label>
         <label class="log-filters__item">
           <input type="checkbox" id="filterDebug" checked data-cat="debug" />
           Debug <span class="log-filters__hint">(USER_DEBUG)</span>
