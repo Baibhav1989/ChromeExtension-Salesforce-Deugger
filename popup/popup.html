@@ -41,19 +41,19 @@
       </div>
     </div>
     <header class="header">
-      <div class="header__title">
-        <span class="header__name">Salesforce Debugger</span>
-        <span class="header__badge" id="statusBadge" hidden></span>
+      <div class="header__brand">
+        <h1 class="header__name">Salesforce Debugger</h1>
+        <span class="header__count" id="statusBadge" hidden role="status" aria-live="polite"></span>
       </div>
       <div class="header__actions">
-        <button type="button" class="btn btn--ghost" id="btnRefresh" title="Refresh now">
+        <button type="button" class="btn btn--ghost btn--header" id="btnRefresh" title="Refresh now">
           Refresh
         </button>
-        <a class="btn btn--ghost" id="linkOptions" href="#" title="Settings">Settings</a>
+        <a class="btn btn--ghost btn--header" id="linkOptions" href="#" title="Settings">Settings</a>
       </div>
     </header>
 
-    <p class="hint" id="hint">
+    <p class="hint hint--intro" id="hint">
       Open a Salesforce tab (Lightning or Setup), then load logs. The list refreshes automatically.
     </p>
 

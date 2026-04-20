@@ -167,13 +167,24 @@ function hideError() {
 }
 
 function setBadge(text, ok) {
+  if (!statusBadge) return;
+  statusBadge.className = "header__count";
   if (!text) {
     statusBadge.hidden = true;
+    statusBadge.textContent = "";
     return;
   }
   statusBadge.hidden = false;
   statusBadge.textContent = text;
-  statusBadge.style.color = ok ? "var(--ok)" : "var(--muted)";
+  if (text === "Error") {
+    statusBadge.classList.add("header__count--error");
+  } else if (text === "Loading…") {
+    statusBadge.classList.add("header__count--loading");
+  } else if (ok) {
+    statusBadge.classList.add("header__count--ok");
+  } else {
+    statusBadge.classList.add("header__count--muted");
+  }
 }
 
 function escapeHtml(s) {
@@ -220,14 +231,15 @@ function renderRecords(records) {
           <span class="log-item__status ${statusClass}">${escapeHtml(r.status || "—")}</span>
         </div>
         <div class="log-item__meta">
-          <div><strong>Operation:</strong> ${escapeHtml(r.operation || "—")}</div>
-          <div><strong>Application:</strong> ${escapeHtml(r.application || "—")}</div>
-          <div><strong>User:</strong> ${escapeHtml(r.logUserName || r.logUserId || "—")}</div>
-          <div><strong>Duration:</strong> ${escapeHtml(
+          <div class="log-item__meta-row"><span class="log-item__meta-key">Operation</span><span class="log-item__meta-val">${escapeHtml(r.operation || "—")}</span></div>
+          <div class="log-item__meta-row"><span class="log-item__meta-key">Application</span><span class="log-item__meta-val">${escapeHtml(r.application || "—")}</span></div>
+          <div class="log-item__meta-row"><span class="log-item__meta-key">User</span><span class="log-item__meta-val">${escapeHtml(r.logUserName || r.logUserId || "—")}</span></div>
+          <div class="log-item__meta-row"><span class="log-item__meta-key">Duration</span><span class="log-item__meta-val">${escapeHtml(
             r.durationMs != null ? `${r.durationMs} ms` : "—"
-          )} · <strong>Size:</strong> ${escapeHtml(
+          )}</span></div>
+          <div class="log-item__meta-row"><span class="log-item__meta-key">Size</span><span class="log-item__meta-val">${escapeHtml(
       r.logLength != null ? String(r.logLength) : "—"
-    )}</div>
+    )}</span></div>
         </div>
       </div>
     `;
