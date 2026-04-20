@@ -6,8 +6,8 @@ const traceStatus = document.getElementById("traceStatus");
 const btnRefresh = document.getElementById("btnRefresh");
 const btnSetLog = document.getElementById("btnSetLog");
 const refreshSelect = document.getElementById("refreshSelect");
-const userFilterSelect = document.getElementById("userFilterSelect");
 const userSearchInput = document.getElementById("userSearchInput");
+const userTypeaheadList = document.getElementById("userTypeaheadList");
 const linkOptions = document.getElementById("linkOptions");
 
 const FILTER_ALL = "__ALL__";
@@ -25,6 +25,8 @@ const DEFAULT_DEBUG_LEVELS = {
 let refreshTimer = null;
 let lastSfTabId = null;
 let allUsers = [];
+let selectedUserId = FILTER_ALL;
+let selectedUserLabel = "All";
 
 function logJsError(context, error) {
   const message = error?.stack || error?.message || String(error);
@@ -85,8 +87,7 @@ async function getSfTabId() {
 }
 
 function getSelectedUserId() {
-  const value = userFilterSelect.value || FILTER_ALL;
-  return value === FILTER_ALL ? null : value;
+  return selectedUserId === FILTER_ALL ? null : selectedUserId;
 }
 
 function formatTime(iso) {
@@ -198,9 +199,7 @@ function renderRecords(records) {
 }
 
 function formatUserLabel(user) {
-  const type = user.userType ? ` (${user.userType})` : "";
-  const username = user.username ? ` - ${user.username}` : "";
-  return `${user.name}${type}${username}`;
+  return user.name || user.username || user.id;
 }
 
 function userMatchesSearch(user, query) {
@@ -222,39 +221,60 @@ function userMatchesSearch(user, query) {
   );
 }
 
-function renderUserOptions() {
-  const previous = userFilterSelect.value || FILTER_ALL;
-  const query = String(userSearchInput.value || "").trim();
-  const visibleUsers = allUsers.filter((u) => userMatchesSearch(u, query));
-  userFilterSelect.innerHTML = "";
+function hideTypeahead() {
+  userTypeaheadList.hidden = true;
+}
 
-  const allOption = document.createElement("option");
-  allOption.value = FILTER_ALL;
-  allOption.textContent = "All";
-  userFilterSelect.appendChild(allOption);
+function showTypeahead() {
+  userTypeaheadList.hidden = false;
+}
+
+function setUserSelection(id, label) {
+  selectedUserId = id || FILTER_ALL;
+  selectedUserLabel = label || "All";
+  userSearchInput.value = selectedUserLabel === "All" ? "" : selectedUserLabel;
+  btnSetLog.disabled = selectedUserId === FILTER_ALL;
+}
+
+async function applyUserSelectionAndRefresh(id, label) {
+  setUserSelection(id, label);
+  hideTypeahead();
+  await loadLogs();
+  await refreshTraceStatusForSelection();
+}
+
+function renderUserOptions() {
+  const previous = selectedUserId || FILTER_ALL;
+  const query = String(userSearchInput.value || "").trim();
+  const visibleUsers = allUsers.filter((u) => userMatchesSearch(u, query)).slice(0, 50);
+  userTypeaheadList.innerHTML = "";
+
+  const allItem = document.createElement("div");
+  allItem.className = `typeahead-item${previous === FILTER_ALL ? " typeahead-item--active" : ""}`;
+  allItem.textContent = "All";
+  allItem.addEventListener("mousedown", async (e) => {
+    e.preventDefault();
+    await applyUserSelectionAndRefresh(FILTER_ALL, "All");
+  });
+  userTypeaheadList.appendChild(allItem);
 
   for (const user of visibleUsers) {
-    const opt = document.createElement("option");
-    opt.value = user.id;
-    opt.textContent = formatUserLabel(user);
-    userFilterSelect.appendChild(opt);
+    const item = document.createElement("div");
+    const isActive = user.id === previous;
+    item.className = `typeahead-item${isActive ? " typeahead-item--active" : ""}`;
+    item.innerHTML = `${escapeHtml(formatUserLabel(user))}${
+      user.username ? `<span class="typeahead-item__sub">${escapeHtml(user.username)}</span>` : ""
+    }`;
+    item.addEventListener("mousedown", async (e) => {
+      e.preventDefault();
+      await applyUserSelectionAndRefresh(user.id, formatUserLabel(user));
+    });
+    userTypeaheadList.appendChild(item);
   }
 
-  const exists = [...userFilterSelect.options].some((opt) => opt.value === previous);
-  if (!exists && previous !== FILTER_ALL) {
-    const selectedUser = allUsers.find((u) => u.id === previous);
-    if (selectedUser) {
-      const opt = document.createElement("option");
-      opt.value = selectedUser.id;
-      opt.textContent = `${formatUserLabel(selectedUser)} (selected)`;
-      userFilterSelect.appendChild(opt);
-    }
+  if (!query && selectedUserId === FILTER_ALL) {
+    userSearchInput.placeholder = "All";
   }
-  const existsAfterRestore = [...userFilterSelect.options].some(
-    (opt) => opt.value === previous
-  );
-  userFilterSelect.value = existsAfterRestore ? previous : FILTER_ALL;
-  btnSetLog.disabled = userFilterSelect.value === FILTER_ALL;
 }
 
 async function loadActiveUsers() {
@@ -268,6 +288,7 @@ async function loadActiveUsers() {
       return;
     }
     allUsers = res.users || [];
+    setUserSelection(selectedUserId, selectedUserLabel);
     renderUserOptions();
   } catch (error) {
     logJsError("loadActiveUsers", error);
@@ -426,13 +447,23 @@ refreshSelect.addEventListener("change", () => {
   scheduleRefresh();
 });
 
-userFilterSelect.addEventListener("change", async () => {
-  await loadLogs();
-  await refreshTraceStatusForSelection();
+userSearchInput.addEventListener("input", () => {
+  selectedUserId = FILTER_ALL;
+  selectedUserLabel = "All";
+  btnSetLog.disabled = true;
+  renderUserOptions();
+  showTypeahead();
 });
 
-userSearchInput.addEventListener("input", () => {
+userSearchInput.addEventListener("focus", () => {
   renderUserOptions();
+  showTypeahead();
+});
+
+userSearchInput.addEventListener("blur", () => {
+  setTimeout(() => {
+    hideTypeahead();
+  }, 120);
 });
 
 linkOptions.addEventListener("click", (e) => {

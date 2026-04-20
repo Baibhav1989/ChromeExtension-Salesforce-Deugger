@@ -25,7 +25,7 @@
     </p>
 
     <div class="toolbar">
-      <label class="field">
+      <label class="field field--interval">
         <span>Every</span>
         <select id="refreshSelect" aria-label="Auto refresh interval">
           <option value="0">Manual only</option>
@@ -42,10 +42,9 @@
           id="userSearchInput"
           placeholder="Type to search user"
           aria-label="Search users"
+          autocomplete="off"
         />
-        <select id="userFilterSelect" aria-label="Select user">
-          <option value="__ALL__" selected>All</option>
-        </select>
+        <div class="typeahead-list" id="userTypeaheadList" hidden></div>
       </label>
       <button type="button" class="btn btn--brand" id="btnSetLog" title="Set trace flag">
         Set Log
