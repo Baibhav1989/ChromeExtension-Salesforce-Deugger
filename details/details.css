@@ -1,0 +1,299 @@
+:root {
+  color-scheme: light dark;
+  --bg: #0c1017;
+  --surface: #121a24;
+  --border: #243044;
+  --text: #e8eef6;
+  --muted: #93a4bd;
+  --accent: #3aa8ff;
+  --danger: #ff7a7a;
+  --danger-bg: rgba(255, 90, 90, 0.12);
+  --soql: #5ce6c1;
+  --method: #9ab9ff;
+  --debug: #f3d37a;
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f0f3f8;
+    --surface: #ffffff;
+    --border: #d5dde8;
+    --text: #15202b;
+    --muted: #5a6b82;
+    --danger-bg: rgba(200, 60, 60, 0.08);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.topbar__left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.link-back {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.link-back:hover {
+  color: var(--accent);
+}
+
+.topbar__right {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn--primary {
+  border-color: rgba(58, 168, 255, 0.45);
+  color: var(--accent);
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.banner {
+  margin: 12px 18px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.banner--loading {
+  color: var(--muted);
+}
+
+.banner--error {
+  color: var(--danger);
+  border-color: rgba(255, 120, 120, 0.35);
+  background: var(--danger-bg);
+}
+
+.summary {
+  margin: 0 18px 12px;
+}
+
+.summary__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--surface);
+}
+
+.pill__label {
+  color: var(--muted);
+  margin-right: 6px;
+}
+
+.pill--danger {
+  border-color: rgba(255, 120, 120, 0.35);
+}
+
+.error-panel {
+  margin: 0 18px 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 120, 120, 0.35);
+  background: var(--danger-bg);
+}
+
+.section-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.error-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.error-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-item__meta {
+  font-family: var(--font);
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.log-main {
+  margin: 0 18px 24px;
+}
+
+.log-scroll {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: auto;
+  max-height: calc(100vh - 220px);
+}
+
+.log-line {
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.log-line:last-child {
+  border-bottom: none;
+}
+
+.log-line-inner {
+  display: block;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-time {
+  color: var(--muted);
+  margin-right: 8px;
+}
+
+.log-ns {
+  color: #7a8aa3;
+  margin-right: 8px;
+}
+
+.log-event {
+  color: var(--accent);
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.log-line--error {
+  background: var(--danger-bg);
+  border-left: 3px solid var(--danger);
+}
+
+.log-line--error .log-event {
+  color: var(--danger);
+}
+
+.log-line--soql .log-event {
+  color: var(--soql);
+}
+
+.soql-query {
+  color: var(--soql);
+  font-weight: 600;
+}
+
+.soql-end {
+  color: var(--muted);
+}
+
+.log-line--method .log-event {
+  color: var(--method);
+}
+
+.log-line--userdebug .log-event {
+  color: var(--debug);
+}
+
+.log-line--codeunit .log-event {
+  color: #c79cff;
+}
+
+.log-line--dml .log-event {
+  color: #ffa86b;
+}
+
+.log-line--limits .log-event {
+  color: var(--muted);
+}
+
+.user-debug-json {
+  margin-top: 6px;
+  margin-left: 0;
+}
+
+.json-pre {
+  margin: 0;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (prefers-color-scheme: light) {
+  .json-pre {
+    background: #f4f6fb;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Debug log — Salesforce Debugger</title>
+    <link rel="stylesheet" href="details.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar__left">
+        <a class="link-back" id="btnClose" href="#">← Close</a>
+        <h1 class="title">Apex debug log</h1>
+      </div>
+      <div class="topbar__right">
+        <button type="button" class="btn" id="btnCopy">Copy raw log</button>
+        <button type="button" class="btn btn--primary" id="btnReload">Reload</button>
+      </div>
+    </header>
+
+    <section class="banner banner--loading" id="bannerLoading">Loading log…</section>
+    <section class="banner banner--error" id="bannerError" hidden></section>
+
+    <section class="summary" id="summary" hidden>
+      <div class="summary__grid">
+        <div class="pill"><span class="pill__label">Lines</span> <span id="sumLines">—</span></div>
+        <div class="pill"><span class="pill__label">SOQL events</span> <span id="sumSoql">—</span></div>
+        <div class="pill pill--danger"><span class="pill__label">Errors</span> <span id="sumErrors">—</span></div>
+      </div>
+    </section>
+
+    <section class="error-panel" id="errorPanel" hidden>
+      <h2 class="section-title">Errors &amp; exceptions</h2>
+      <ul class="error-list" id="errorList"></ul>
+    </section>
+
+    <main class="log-main" id="logMain" hidden>
+      <div class="log-scroll" id="logScroll"></div>
+    </main>
+
+    <script type="module" src="details.js"></script>
+  </body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Salesforce Debugger — Settings</title>
+    <style>
+      :root {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        color: #15202b;
+        background: #f4f6f9;
+      }
+      body {
+        max-width: 520px;
+        margin: 40px auto;
+        padding: 0 20px;
+      }
+      h1 {
+        font-size: 20px;
+      }
+      label {
+        display: block;
+        margin: 16px 0 6px;
+        font-weight: 600;
+      }
+      input,
+      select {
+        width: 100%;
+        max-width: 280px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid #c4cdd8;
+      }
+      p {
+        color: #5a6b82;
+        font-size: 13px;
+      }
+      .saved {
+        color: #2e844a;
+        font-size: 13px;
+        margin-top: 12px;
+        min-height: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Salesforce Debugger</h1>
+    <p>
+      Adjust how many logs are fetched and how often the popup refreshes. You must have API access
+      and permission to view Apex debug logs for your user.
+    </p>
+
+    <label for="logLimit">Logs to fetch (max 200)</label>
+    <input type="number" id="logLimit" min="1" max="200" />
+
+    <label for="refreshSeconds">Default auto-refresh interval (seconds)</label>
+    <select id="refreshSeconds">
+      <option value="0">Manual only</option>
+      <option value="10">10</option>
+      <option value="15">15</option>
+      <option value="30">30</option>
+      <option value="60">60</option>
+    </select>
+
+    <div class="saved" id="saved"></div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

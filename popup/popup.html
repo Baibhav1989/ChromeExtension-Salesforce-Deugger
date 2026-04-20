@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Salesforce Debugger</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="header__title">
+        <span class="header__name">Salesforce Debugger</span>
+        <span class="header__badge" id="statusBadge" hidden></span>
+      </div>
+      <div class="header__actions">
+        <button type="button" class="btn btn--ghost" id="btnRefresh" title="Refresh now">
+          Refresh
+        </button>
+        <a class="btn btn--ghost" id="linkOptions" href="#" title="Settings">Settings</a>
+      </div>
+    </header>
+
+    <p class="hint" id="hint">
+      Open a Salesforce tab (Lightning or Setup), then load logs. The list refreshes automatically.
+    </p>
+
+    <div class="toolbar">
+      <label class="field">
+        <span>Every</span>
+        <select id="refreshSelect" aria-label="Auto refresh interval">
+          <option value="0">Manual only</option>
+          <option value="10">10 s</option>
+          <option value="15" selected>15 s</option>
+          <option value="30">30 s</option>
+          <option value="60">60 s</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="list-wrap">
+      <ul class="log-list" id="logList"></ul>
+      <p class="empty" id="emptyState">No logs loaded yet.</p>
+      <p class="error" id="errorState" hidden></p>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
