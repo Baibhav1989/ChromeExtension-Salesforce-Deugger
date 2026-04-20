@@ -13,6 +13,10 @@
         <h1 class="title">Apex debug log</h1>
       </div>
       <div class="topbar__right">
+        <label class="toggle-optimize" title="When on, log is grouped in tables by code unit. When off, full text with line numbers.">
+          <input type="checkbox" id="chkOptimizeLog" />
+          <span>Optimize log</span>
+        </label>
         <button type="button" class="btn" id="btnCopy">Copy raw log</button>
         <button type="button" class="btn btn--primary" id="btnReload">Reload</button>
       </div>
@@ -24,7 +28,14 @@
     <section class="summary" id="summary" hidden>
       <div class="summary__grid">
         <div class="pill"><span class="pill__label">Total lines</span> <span id="sumLines">—</span></div>
-        <div class="pill"><span class="pill__label">SOQL events</span> <span id="sumSoql">—</span></div>
+        <button
+          type="button"
+          class="pill pill--soql pill--clickable"
+          id="pillSoqlBtn"
+          aria-label="Jump to SOQL events in the filtered log"
+        >
+          <span class="pill__label">SOQL events</span> <span id="sumSoql">—</span>
+        </button>
         <button
           type="button"
           class="pill pill--danger pill--clickable"
@@ -42,6 +53,16 @@
       </button>
       <span class="error-nav-flyout__pos" id="errorNavPosition" aria-live="polite"></span>
       <button type="button" class="error-nav-flyout__btn" id="errorNavNext" aria-label="Next error">
+        Next →
+      </button>
+    </div>
+
+    <div class="soql-nav-flyout" id="soqlNavFlyout" hidden>
+      <button type="button" class="soql-nav-flyout__btn" id="soqlNavPrev" aria-label="Previous SOQL event">
+        ← Prev
+      </button>
+      <span class="soql-nav-flyout__pos" id="soqlNavPosition" aria-live="polite"></span>
+      <button type="button" class="soql-nav-flyout__btn" id="soqlNavNext" aria-label="Next SOQL event">
         Next →
       </button>
     </div>

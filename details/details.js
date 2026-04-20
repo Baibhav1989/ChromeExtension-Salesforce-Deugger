@@ -3,9 +3,30 @@ import {
   isExceptionsOnlyFilter,
   loadLogFilters,
   parseDebugLog,
+  renderFullRawLogHtml,
   renderLogTableHtml,
   saveLogFilters,
 } from "../lib/log-formatter.js";
+
+const OPTIMIZE_LOG_STORAGE_KEY = "logViewerOptimizeLog";
+
+async function loadOptimizeLogPreference() {
+  try {
+    const stored = await chrome.storage.local.get({
+      [OPTIMIZE_LOG_STORAGE_KEY]: false,
+    });
+    return Boolean(stored[OPTIMIZE_LOG_STORAGE_KEY]);
+  } catch (error) {
+    logJsError("loadOptimizeLogPreference", error);
+    return false;
+  }
+}
+
+function persistOptimizeLogPreference(optimized) {
+  chrome.storage.local
+    .set({ [OPTIMIZE_LOG_STORAGE_KEY]: Boolean(optimized) })
+    .catch((error) => logJsError("persistOptimizeLogPreference", error));
+}
 
 const CATEGORY_FILTER_IDS = [
   "filterDebug",
@@ -41,10 +62,15 @@ const sumLines = document.getElementById("sumLines");
 const sumSoql = document.getElementById("sumSoql");
 const sumErrors = document.getElementById("sumErrors");
 const pillErrorsBtn = document.getElementById("pillErrorsBtn");
+const pillSoqlBtn = document.getElementById("pillSoqlBtn");
 const errorNavFlyout = document.getElementById("errorNavFlyout");
 const errorNavPrev = document.getElementById("errorNavPrev");
 const errorNavNext = document.getElementById("errorNavNext");
 const errorNavPosition = document.getElementById("errorNavPosition");
+const soqlNavFlyout = document.getElementById("soqlNavFlyout");
+const soqlNavPrev = document.getElementById("soqlNavPrev");
+const soqlNavNext = document.getElementById("soqlNavNext");
+const soqlNavPosition = document.getElementById("soqlNavPosition");
 const btnCopy = document.getElementById("btnCopy");
 const btnReload = document.getElementById("btnReload");
 const btnClose = document.getElementById("btnClose");
@@ -55,6 +81,8 @@ const filterDebug = document.getElementById("filterDebug");
 const filterException = document.getElementById("filterException");
 const filterQuery = document.getElementById("filterQuery");
 const filterVariable = document.getElementById("filterVariable");
+const chkOptimizeLog = document.getElementById("chkOptimizeLog");
+const logFilters = document.getElementById("logFilters");
 
 let rawText = "";
 /** @type {any} */
@@ -64,8 +92,17 @@ let lastParsed = null;
 let errorNavNodes = [];
 let errorNavIndex = 0;
 
+/** @type {HTMLElement[]} */
+let soqlNavNodes = [];
+let soqlNavIndex = 0;
+
 if (extensionVersion) {
   extensionVersion.textContent = `v${chrome.runtime.getManifest().version}`;
+}
+
+function isOptimizedView() {
+  if (!chkOptimizeLog) return false;
+  return chkOptimizeLog.checked;
 }
 
 function readFiltersFromUi() {
@@ -99,17 +136,67 @@ function collectErrorRowElements() {
   );
 }
 
+function collectSoqlRowElements() {
+  return Array.from(
+    logTableHost.querySelectorAll('tr[id^="log-soql-row-"]')
+  );
+}
+
 function updateErrorSummaryAndNav() {
-  errorNavNodes = collectErrorRowElements();
-  const n = errorNavNodes.length;
-  sumErrors.textContent = String(n);
-  if (pillErrorsBtn) {
-    pillErrorsBtn.disabled = n === 0;
+  if (!isOptimizedView() && lastParsed) {
+    errorNavNodes = [];
+    soqlNavNodes = [];
+    const errN = lastParsed.summary?.errors ?? 0;
+    const soqlN = lastParsed.summary?.soql ?? 0;
+    sumErrors.textContent = String(errN);
+    sumSoql.textContent = String(soqlN);
+    if (pillErrorsBtn) {
+      pillErrorsBtn.disabled = true;
+      pillErrorsBtn.title =
+        "Turn on Optimize log to jump between errors in the filtered table view.";
+    }
+    if (pillSoqlBtn) {
+      pillSoqlBtn.disabled = true;
+      pillSoqlBtn.title =
+        "Turn on Optimize log to jump between SOQL lines in the filtered table view.";
+    }
+    if (errorNavFlyout) errorNavFlyout.hidden = true;
+    if (soqlNavFlyout) soqlNavFlyout.hidden = true;
+    errorNavIndex = 0;
+    soqlNavIndex = 0;
+    if (errorNavPosition) {
+      errorNavPosition.textContent = "";
+    }
+    if (soqlNavPosition) {
+      soqlNavPosition.textContent = "";
+    }
+    return;
   }
-  errorNavFlyout.hidden = true;
+  if (pillErrorsBtn) {
+    pillErrorsBtn.removeAttribute("title");
+  }
+  if (pillSoqlBtn) {
+    pillSoqlBtn.removeAttribute("title");
+  }
+  errorNavNodes = collectErrorRowElements();
+  soqlNavNodes = collectSoqlRowElements();
+  sumErrors.textContent = String(errorNavNodes.length);
+  sumSoql.textContent = String(soqlNavNodes.length);
+  if (pillErrorsBtn) {
+    pillErrorsBtn.disabled = errorNavNodes.length === 0;
+  }
+  if (pillSoqlBtn) {
+    pillSoqlBtn.disabled = soqlNavNodes.length === 0;
+  }
+  if (errorNavFlyout) errorNavFlyout.hidden = true;
+  if (soqlNavFlyout) soqlNavFlyout.hidden = true;
   errorNavIndex = 0;
+  soqlNavIndex = 0;
   if (errorNavPosition) {
     errorNavPosition.textContent = "";
+  }
+  if (soqlNavPosition) {
+    soqlNavPosition.textContent = "";
   }
 }
 
@@ -131,8 +218,27 @@ function scrollToErrorIndex(i) {
   updateErrorNavLabel();
 }
 
+function updateSoqlNavLabel() {
+  const n = soqlNavNodes.length;
+  if (!soqlNavPosition) return;
+  if (n === 0) {
+    soqlNavPosition.textContent = "";
+    return;
+  }
+  soqlNavPosition.textContent = `${soqlNavIndex + 1} / ${n}`;
+}
+
+function scrollToSoqlIndex(i) {
+  if (i < 0 || i >= soqlNavNodes.length) return;
+  const el = soqlNavNodes[i];
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  soqlNavIndex = i;
+  updateSoqlNavLabel();
+}
+
 function applyFiltersAndRender() {
   if (!lastParsed) return;
+  if (!isOptimizedView()) return;
   const filters = readFiltersFromUi();
   saveLogFilters(filters);
   const filtered = filterLogLines(lastParsed.lines, filters);
@@ -142,6 +248,27 @@ function applyFiltersAndRender() {
   updateErrorSummaryAndNav();
 }
 
+function applyViewMode() {
+  if (!lastParsed || !logMain) return;
+  const optimized = isOptimizedView();
+  persistOptimizeLogPreference(optimized);
+  logMain.classList.toggle("log-main--optimized", optimized);
+  logMain.classList.toggle("log-main--raw", !optimized);
+  if (logFilters) {
+    logFilters.hidden = !optimized;
+  }
+  if (!optimized) {
+    if (errorNavFlyout) errorNavFlyout.hidden = true;
+    if (soqlNavFlyout) soqlNavFlyout.hidden = true;
+  }
+  if (optimized) {
+    applyFiltersAndRender();
+  } else {
+    logTableHost.innerHTML = renderFullRawLogHtml(lastParsed.lines);
+    updateErrorSummaryAndNav();
+  }
+}
+
 filterAll.addEventListener("change", () => {
   const on = filterAll.checked;
   filterDebug.checked = on;
@@ -149,29 +276,57 @@ filterAll.addEventListener("change", () => {
   filterQuery.checked = on;
   filterVariable.checked = on;
   filterAll.indeterminate = false;
-  applyFiltersAndRender();
+  if (isOptimizedView()) {
+    applyFiltersAndRender();
+  } else {
+    saveLogFilters(readFiltersFromUi());
+  }
 });
 
 for (const id of CATEGORY_FILTER_IDS) {
   document.getElementById(id).addEventListener("change", () => {
     syncMasterCategoryCheckbox();
-    applyFiltersAndRender();
+    if (isOptimizedView()) {
+      applyFiltersAndRender();
+    } else {
+      saveLogFilters(readFiltersFromUi());
+    }
   });
 }
 
+if (chkOptimizeLog) {
+  chkOptimizeLog.addEventListener("change", () => applyViewMode());
+}
+
 pillErrorsBtn.addEventListener("click", () => {
+  if (!isOptimizedView()) return;
+  if (soqlNavFlyout) soqlNavFlyout.hidden = true;
   errorNavNodes = collectErrorRowElements();
   const n = errorNavNodes.length;
   sumErrors.textContent = String(n);
   if (n === 0) return;
   errorNavIndex = 0;
   scrollToErrorIndex(0);
-  if (n > 1) {
-    errorNavFlyout.hidden = false;
-  } else {
-    errorNavFlyout.hidden = true;
+  if (errorNavFlyout) {
+    errorNavFlyout.hidden = n <= 1;
   }
 });
+
+if (pillSoqlBtn) {
+  pillSoqlBtn.addEventListener("click", () => {
+    if (!isOptimizedView()) return;
+    if (errorNavFlyout) errorNavFlyout.hidden = true;
+    soqlNavNodes = collectSoqlRowElements();
+    const n = soqlNavNodes.length;
+    sumSoql.textContent = String(n);
+    if (n === 0) return;
+    soqlNavIndex = 0;
+    scrollToSoqlIndex(0);
+    if (soqlNavFlyout) {
+      soqlNavFlyout.hidden = n <= 1;
+    }
+  });
+}
 
 errorNavPrev.addEventListener("click", () => {
   if (errorNavNodes.length <= 1) return;
@@ -184,6 +339,22 @@ errorNavNext.addEventListener("click", () => {
   const next = (errorNavIndex + 1) % errorNavNodes.length;
   scrollToErrorIndex(next);
 });
+
+if (soqlNavPrev) {
+  soqlNavPrev.addEventListener("click", () => {
+    if (soqlNavNodes.length <= 1) return;
+    const prev = (soqlNavIndex - 1 + soqlNavNodes.length) % soqlNavNodes.length;
+    scrollToSoqlIndex(prev);
+  });
+}
+
+if (soqlNavNext) {
+  soqlNavNext.addEventListener("click", () => {
+    if (soqlNavNodes.length <= 1) return;
+    const next = (soqlNavIndex + 1) % soqlNavNodes.length;
+    scrollToSoqlIndex(next);
+  });
+}
 
 function showLoading(show) {
   bannerLoading.hidden = !show;
@@ -230,11 +401,14 @@ async function fetchLog() {
   lastParsed = parsed;
 
   sumLines.textContent = String(parsed.lines.length);
-  sumSoql.textContent = String(parsed.summary.soql);
   summary.hidden = false;
 
   applyFiltersToUi(loadLogFilters());
-  applyFiltersAndRender();
+  const optimized = await loadOptimizeLogPreference();
+  if (chkOptimizeLog) {
+    chkOptimizeLog.checked = optimized;
+  }
+  applyViewMode();
   logMain.hidden = false;
 }
 
