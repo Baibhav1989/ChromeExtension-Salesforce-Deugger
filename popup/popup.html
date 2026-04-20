@@ -68,22 +68,45 @@
           <option value="60">60 s</option>
         </select>
       </label>
-      <label class="field field--user">
-        <span>Log User</span>
-        <input
-          type="search"
-          id="userSearchInput"
-          placeholder="Type to search user"
-          aria-label="Search users"
-          autocomplete="off"
-        />
-        <div class="typeahead-list" id="userTypeaheadList" hidden></div>
-      </label>
-      <button type="button" class="btn btn--brand" id="btnSetLog" title="Set trace flag">
-        Set Log
-      </button>
+      <div class="toolbar__user-row">
+        <label class="field field--user field--user-row">
+          <span>Log User</span>
+          <input
+            type="search"
+            id="userSearchInput"
+            placeholder="Type to search user"
+            aria-label="Search users"
+            autocomplete="off"
+          />
+          <div class="typeahead-list" id="userTypeaheadList" hidden></div>
+        </label>
+        <button
+          type="button"
+          class="btn btn--brand btn--set-log"
+          id="btnSetLog"
+          title="Set trace flag for the selected user"
+          disabled
+        >
+          Set Log
+        </button>
+      </div>
     </div>
     <p class="hint hint--status" id="traceStatus" hidden></p>
+
+    <div class="log-actions" id="logActionsBar">
+      <label class="log-actions__select-all">
+        <input type="checkbox" id="chkSelectAllLogs" />
+        <span>Select all</span>
+      </label>
+      <div class="log-actions__buttons">
+        <button type="button" class="btn btn--ghost btn--small" id="btnClearSelected">
+          Delete selected
+        </button>
+        <button type="button" class="btn btn--danger btn--small" id="btnClearAllLogs" title="Deletes every Apex log you can query (see Log User filter)">
+          Delete all…
+        </button>
+      </div>
+    </div>
 
     <div class="list-wrap">
       <ul class="log-list" id="logList"></ul>

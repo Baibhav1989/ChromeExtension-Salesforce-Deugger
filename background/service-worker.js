@@ -1,11 +1,13 @@
 import { resolveSession } from "./sf-session.js";
 import {
   createTraceFlag,
+  deleteApexLogs,
   getApexLogBody,
   getOrCreateDebugLevel,
   getTraceFlagStatus,
   listActiveUsers,
   listApexLogs,
+  queryAllApexLogIds,
   searchUsers,
 } from "./sf-api.js";
 
@@ -86,6 +88,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .then(sendResponse)
       .catch((e) => {
         logJsError("GET_LOG_BODY", e);
+        sendResponse({ ok: false, error: e?.message || String(e) });
+      });
+    return true;
+  }
+  if (message?.type === "DELETE_LOGS") {
+    handleDeleteLogs(message.tabId, message)
+      .then(sendResponse)
+      .catch((e) => {
+        logJsError("DELETE_LOGS", e);
         sendResponse({ ok: false, error: e?.message || String(e) });
       });
     return true;
@@ -288,4 +299,49 @@ async function handleGetLogBody(tabId, logId) {
     logId
   );
   return { ok: true, body, logId };
+}
+
+/**
+ * @param {number|undefined} tabId
+ * @param {{ deleteAll?: boolean, logIds?: string[], logUserId?: string|null }} payload
+ */
+async function handleDeleteLogs(tabId, payload) {
+  const resolved = await resolveSessionFromActiveTab(tabId);
+  if (!resolved.ok) return resolved;
+
+  const { apiBase, sessionId } = resolved.session;
+  /** @type {string[]} */
+  let ids = [];
+
+  if (payload?.deleteAll) {
+    const uid =
+      payload.logUserId != null && String(payload.logUserId).trim() !== ""
+        ? String(payload.logUserId)
+        : null;
+    ids = await queryAllApexLogIds(apiBase, sessionId, uid);
+  } else {
+    ids = Array.isArray(payload?.logIds) ? payload.logIds.filter(Boolean) : [];
+  }
+
+  if (ids.length === 0) {
+    return {
+      ok: true,
+      deleted: 0,
+      failed: 0,
+      totalAttempted: 0,
+      errors: [],
+      message: "No logs to delete.",
+    };
+  }
+
+  const result = await deleteApexLogs(apiBase, sessionId, ids);
+  const ok = result.errors.length === 0;
+  return {
+    ok,
+    deleted: result.deleted,
+    failed: result.errors.length,
+    totalAttempted: result.totalAttempted,
+    errors: result.errors.slice(0, 10),
+    partial: result.errors.length > 0 && result.deleted > 0,
+  };
 }

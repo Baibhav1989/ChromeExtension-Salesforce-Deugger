@@ -286,3 +286,109 @@ export async function getApexLogBody(apiBase, sessionId, logId) {
   }
   throw new Error(lastErr);
 }
+
+/**
+ * @param {string} apiBase
+ * @param {string} sessionId
+ * @param {string|null} logUserId - if set, only logs for that user
+ * @returns {Promise<string[]>}
+ */
+export async function queryAllApexLogIds(apiBase, sessionId, logUserId = null) {
+  const base = String(apiBase || "").replace(/\/+$/, "");
+  const where = logUserId
+    ? `WHERE LogUserId = '${String(logUserId).replace(/'/g, "\\'")}'`
+    : "";
+  const soql = `SELECT Id FROM ApexLog ${where}`.trim().replace(/\s+/g, " ");
+  /** @type {string[]} */
+  const ids = [];
+  let url = `${base}/services/data/${API_VERSION}/tooling/query?q=${encodeURIComponent(soql)}`;
+
+  while (url) {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${sessionId}`,
+        Accept: "application/json",
+      },
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(text || "Invalid JSON from Tooling query");
+    }
+    if (!res.ok) {
+      const msg =
+        data?.[0]?.message || data?.message || data?.error || text || `HTTP ${res.status}`;
+      throw new Error(String(msg));
+    }
+    for (const rec of data.records || []) {
+      if (rec.Id) ids.push(rec.Id);
+    }
+    if (data.done || !data.nextRecordsUrl) {
+      url = "";
+    } else {
+      const next = data.nextRecordsUrl;
+      url = next.startsWith("http") ? next : `${base}${next}`;
+    }
+  }
+  return ids;
+}
+
+/**
+ * @param {string} apiBase
+ * @param {string} sessionId
+ * @param {string} logId
+ */
+export async function deleteApexLog(apiBase, sessionId, logId) {
+  const base = String(apiBase || "").replace(/\/+$/, "");
+  const id = encodeURIComponent(logId);
+  const path = `/services/data/${API_VERSION}/tooling/sobjects/ApexLog/${id}`;
+  const res = await fetch(`${base}${path}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${sessionId}`,
+      Accept: "application/json",
+    },
+  });
+  if (res.status === 204 || res.ok) return;
+  const text = await res.text();
+  let body;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = { raw: text };
+  }
+  const msg =
+    body?.[0]?.message || body?.message || body?.error || text || `HTTP ${res.status}`;
+  throw new Error(String(msg));
+}
+
+/**
+ * @param {string} apiBase
+ * @param {string} sessionId
+ * @param {string[]} logIds
+ */
+export async function deleteApexLogs(apiBase, sessionId, logIds) {
+  const unique = [...new Set(logIds.filter(Boolean))];
+  /** @type {{ id: string, message: string }[]} */
+  const errors = [];
+  let deleted = 0;
+  const chunkSize = 8;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    const settled = await Promise.allSettled(
+      chunk.map((id) => deleteApexLog(apiBase, sessionId, id))
+    );
+    settled.forEach((r, j) => {
+      if (r.status === "fulfilled") deleted += 1;
+      else {
+        errors.push({
+          id: chunk[j],
+          message: r.reason?.message || String(r.reason),
+        });
+      }
+    });
+  }
+  return { deleted, errors, totalAttempted: unique.length };
+}

@@ -5,11 +5,17 @@ const statusBadge = document.getElementById("statusBadge");
 const traceStatus = document.getElementById("traceStatus");
 const btnRefresh = document.getElementById("btnRefresh");
 const btnSetLog = document.getElementById("btnSetLog");
+const SET_LOG_TITLE_DEFAULT = "Set trace flag for the selected user";
+const SET_LOG_TITLE_ACTIVE =
+  "Debug trace is already active for this user (see message below)";
 const refreshSelect = document.getElementById("refreshSelect");
 const userSearchInput = document.getElementById("userSearchInput");
 const userTypeaheadList = document.getElementById("userTypeaheadList");
 const linkOptions = document.getElementById("linkOptions");
 const extensionVersion = document.getElementById("extension-version");
+const chkSelectAllLogs = document.getElementById("chkSelectAllLogs");
+const btnClearSelected = document.getElementById("btnClearSelected");
+const btnClearAllLogs = document.getElementById("btnClearAllLogs");
 
 const FILTER_ALL = "__ALL__";
 const DEFAULT_DEBUG_LEVELS = {
@@ -116,6 +122,25 @@ function clearList() {
   logList.innerHTML = "";
 }
 
+function syncSelectAllCheckbox() {
+  if (!chkSelectAllLogs) return;
+  const boxes = [...logList.querySelectorAll(".log-item__cb")];
+  if (boxes.length === 0) {
+    chkSelectAllLogs.checked = false;
+    chkSelectAllLogs.indeterminate = false;
+    return;
+  }
+  const checked = boxes.filter((b) => b.checked).length;
+  chkSelectAllLogs.checked = checked === boxes.length;
+  chkSelectAllLogs.indeterminate = checked > 0 && checked < boxes.length;
+}
+
+function getSelectedLogIdsFromList() {
+  return [...logList.querySelectorAll(".log-item__cb:checked")]
+    .map((cb) => cb.closest(".log-item")?.dataset.logId)
+    .filter(Boolean);
+}
+
 function showTraceStatus(text, tone) {
   traceStatus.hidden = false;
   traceStatus.className = "hint hint--status";
@@ -186,25 +211,38 @@ function renderRecords(records) {
         : "log-item__status--fail";
 
     li.innerHTML = `
-      <div class="log-item__top">
-        <span class="log-item__time">${escapeHtml(formatTime(r.startTime))}</span>
-        <span class="log-item__status ${statusClass}">${escapeHtml(r.status || "—")}</span>
-      </div>
-      <div class="log-item__meta">
-        <div><strong>Operation:</strong> ${escapeHtml(r.operation || "—")}</div>
-        <div><strong>Application:</strong> ${escapeHtml(r.application || "—")}</div>
-        <div><strong>User:</strong> ${escapeHtml(r.logUserName || r.logUserId || "—")}</div>
-        <div><strong>Duration:</strong> ${escapeHtml(
-          r.durationMs != null ? `${r.durationMs} ms` : "—"
-        )} · <strong>Size:</strong> ${escapeHtml(
+      <label class="log-item__select">
+        <input type="checkbox" class="log-item__cb" aria-label="Select log for delete" />
+      </label>
+      <div class="log-item__body">
+        <div class="log-item__top">
+          <span class="log-item__time">${escapeHtml(formatTime(r.startTime))}</span>
+          <span class="log-item__status ${statusClass}">${escapeHtml(r.status || "—")}</span>
+        </div>
+        <div class="log-item__meta">
+          <div><strong>Operation:</strong> ${escapeHtml(r.operation || "—")}</div>
+          <div><strong>Application:</strong> ${escapeHtml(r.application || "—")}</div>
+          <div><strong>User:</strong> ${escapeHtml(r.logUserName || r.logUserId || "—")}</div>
+          <div><strong>Duration:</strong> ${escapeHtml(
+            r.durationMs != null ? `${r.durationMs} ms` : "—"
+          )} · <strong>Size:</strong> ${escapeHtml(
       r.logLength != null ? String(r.logLength) : "—"
     )}</div>
+        </div>
       </div>
     `;
 
-    li.addEventListener("click", () => openDetail(r.id));
+    li.addEventListener("click", (e) => {
+      if (e.target.closest(".log-item__select")) return;
+      openDetail(r.id);
+    });
+    const rowCb = li.querySelector(".log-item__cb");
+    if (rowCb) {
+      rowCb.addEventListener("change", () => syncSelectAllCheckbox());
+    }
     logList.appendChild(li);
   }
+  syncSelectAllCheckbox();
 }
 
 function formatUserLabel(user) {
@@ -259,6 +297,7 @@ function setUserSelection(id, label) {
   selectedUserLabel = label || "All";
   userSearchInput.value = selectedUserLabel === "All" ? "" : selectedUserLabel;
   btnSetLog.disabled = selectedUserId === FILTER_ALL;
+  btnSetLog.title = SET_LOG_TITLE_DEFAULT;
 }
 
 async function clearPersistedDefaultTraceUser() {
@@ -417,6 +456,48 @@ async function searchUsersByQuery(rawQuery) {
   }
 }
 
+async function deleteLogsMessage(payload) {
+  const tabId = await getSfTabId();
+  if (tabId == null) {
+    showTraceStatus("Open a Salesforce tab first.", "error");
+    return null;
+  }
+  lastSfTabId = tabId;
+  return chrome.runtime.sendMessage({
+    type: "DELETE_LOGS",
+    tabId,
+    ...payload,
+  });
+}
+
+function summarizeDeleteResponse(res) {
+  if (!res) {
+    showTraceStatus("No response from extension.", "error");
+    return;
+  }
+  if (res.ok === false && res.error) {
+    showTraceStatus(res.error, "error");
+    return;
+  }
+  if (res.totalAttempted === 0 && res.message) {
+    showTraceStatus(res.message, "warn");
+    return;
+  }
+  if (res.ok) {
+    showTraceStatus(`Deleted ${res.deleted} log(s).`, "ok");
+    return;
+  }
+  if (res.partial) {
+    showTraceStatus(
+      `Deleted ${res.deleted} of ${res.totalAttempted}. ${res.failed} failed (permissions or locks).`,
+      "warn"
+    );
+    return;
+  }
+  const firstErr = res.errors?.[0]?.message || "Delete failed.";
+  showTraceStatus(firstErr, "error");
+}
+
 async function loadLogs() {
   try {
     hideError();
@@ -455,8 +536,9 @@ async function loadLogs() {
 async function refreshTraceStatusForSelection() {
   try {
     const userId = getSelectedUserId();
-    btnSetLog.disabled = !userId;
+    btnSetLog.title = SET_LOG_TITLE_DEFAULT;
     if (!userId) {
+      btnSetLog.disabled = true;
       hideTraceStatus();
       return;
     }
@@ -470,11 +552,14 @@ async function refreshTraceStatusForSelection() {
     });
     if (!res?.ok) {
       showTraceStatus(res?.error || "Could not read trace status.", "error");
+      btnSetLog.disabled = false;
       return;
     }
     if (res.active && res.expirationDate) {
       await persistDefaultTraceUser(userId, selectedUserLabel, res.expirationDate);
       showTraceStatus(`Trace already active until ${formatTime(res.expirationDate)}.`, "ok");
+      btnSetLog.disabled = true;
+      btnSetLog.title = SET_LOG_TITLE_ACTIVE;
       return;
     }
     if (res.expiredAt) {
@@ -483,13 +568,17 @@ async function refreshTraceStatusForSelection() {
         `Trace expired at ${formatTime(res.expiredAt)}. Click Set Log to enable again.`,
         "warn"
       );
+      btnSetLog.disabled = false;
       return;
     }
     await clearPersistedDefaultTraceUserIfMatches(userId);
     showTraceStatus("No active trace for this user. Click Set Log.", "warn");
+    btnSetLog.disabled = false;
   } catch (error) {
     logJsError("refreshTraceStatusForSelection", error);
     showTraceStatus("Could not read trace status. Check console logs.", "error");
+    const userId = getSelectedUserId();
+    if (userId) btnSetLog.disabled = false;
   }
 }
 
@@ -541,7 +630,6 @@ async function setTraceForSelectedUser() {
     showTraceStatus("Failed to set trace flag for selected user. Check console logs.", "error");
   } finally {
     btnSetLog.textContent = oldText;
-    btnSetLog.disabled = false;
   }
 }
 
@@ -572,10 +660,77 @@ refreshSelect.addEventListener("change", () => {
   scheduleRefresh();
 });
 
+if (chkSelectAllLogs) {
+  chkSelectAllLogs.addEventListener("change", () => {
+    const on = chkSelectAllLogs.checked;
+    logList.querySelectorAll(".log-item__cb").forEach((c) => {
+      c.checked = on;
+    });
+    chkSelectAllLogs.indeterminate = false;
+  });
+}
+
+btnClearSelected.addEventListener("click", async () => {
+  const ids = getSelectedLogIdsFromList();
+  if (ids.length === 0) {
+    showTraceStatus("Select one or more logs (checkbox), then delete.", "warn");
+    return;
+  }
+  if (
+    !confirm(
+      `Delete ${ids.length} debug log(s) from Salesforce? This cannot be undone.`
+    )
+  ) {
+    return;
+  }
+  btnClearSelected.disabled = true;
+  try {
+    const res = await deleteLogsMessage({ deleteAll: false, logIds: ids });
+    summarizeDeleteResponse(res);
+    await loadLogs();
+    await refreshTraceStatusForSelection();
+  } catch (error) {
+    logJsError("btnClearSelected", error);
+    showTraceStatus("Delete failed. Check console.", "error");
+  } finally {
+    btnClearSelected.disabled = false;
+  }
+});
+
+btnClearAllLogs.addEventListener("click", async () => {
+  const isAllUsers = selectedUserId === FILTER_ALL;
+  const scope = isAllUsers
+    ? "ALL users in this org (every Apex debug log you are allowed to query)"
+    : `user “${selectedUserLabel}” only`;
+  if (
+    !confirm(
+      `Delete debug logs for ${scope}?\n\nThis removes them from Salesforce and cannot be undone.`
+    )
+  ) {
+    return;
+  }
+  btnClearAllLogs.disabled = true;
+  try {
+    const res = await deleteLogsMessage({
+      deleteAll: true,
+      logUserId: isAllUsers ? null : selectedUserId,
+    });
+    summarizeDeleteResponse(res);
+    await loadLogs();
+    await refreshTraceStatusForSelection();
+  } catch (error) {
+    logJsError("btnClearAllLogs", error);
+    showTraceStatus("Delete all failed. Check console.", "error");
+  } finally {
+    btnClearAllLogs.disabled = false;
+  }
+});
+
 userSearchInput.addEventListener("input", () => {
   selectedUserId = FILTER_ALL;
   selectedUserLabel = "All";
   btnSetLog.disabled = true;
+  btnSetLog.title = SET_LOG_TITLE_DEFAULT;
   renderUserOptions();
   showTypeahead();
   const query = String(userSearchInput.value || "").trim();
