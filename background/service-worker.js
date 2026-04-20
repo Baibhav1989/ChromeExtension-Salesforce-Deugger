@@ -1,5 +1,12 @@
 import { resolveSession } from "./sf-session.js";
-import { getApexLogBody, listApexLogs } from "./sf-api.js";
+import {
+  createTraceFlag,
+  getApexLogBody,
+  getOrCreateDebugLevel,
+  getTraceFlagStatus,
+  listActiveUsers,
+  listApexLogs,
+} from "./sf-api.js";
 
 const DEFAULTS = { logLimit: 50, refreshSeconds: 15 };
 
@@ -11,7 +18,30 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "LIST_LOGS") {
-    handleListLogs(message.tabId)
+    handleListLogs(message.tabId, message.logUserId)
+      .then(sendResponse)
+      .catch((e) => sendResponse({ ok: false, error: e?.message || String(e) }));
+    return true;
+  }
+  if (message?.type === "LIST_ACTIVE_USERS") {
+    handleListActiveUsers(message.tabId)
+      .then(sendResponse)
+      .catch((e) => sendResponse({ ok: false, error: e?.message || String(e) }));
+    return true;
+  }
+  if (message?.type === "GET_TRACE_FLAG_STATUS") {
+    handleGetTraceFlagStatus(message.tabId, message.userId)
+      .then(sendResponse)
+      .catch((e) => sendResponse({ ok: false, error: e?.message || String(e) }));
+    return true;
+  }
+  if (message?.type === "SET_TRACE_FLAG") {
+    handleSetTraceFlag(
+      message.tabId,
+      message.userId,
+      message.durationMinutes,
+      message.debugLevels
+    )
       .then(sendResponse)
       .catch((e) => sendResponse({ ok: false, error: e?.message || String(e) }));
     return true;
@@ -61,7 +91,7 @@ function isSalesforceUrl(url) {
   }
 }
 
-async function handleListLogs(tabId) {
+async function resolveSessionFromActiveTab(tabId) {
   const { tabId: tid, url } = await getActiveSalesforceTabId(tabId);
   if (!url) {
     return { ok: false, error: "No tab URL available. Open a Salesforce tab first." };
@@ -72,14 +102,25 @@ async function handleListLogs(tabId) {
 
   const session = await resolveSession(url);
   if ("error" in session) return { ok: false, error: session.error };
+  return { ok: true, session };
+}
+
+async function handleListLogs(tabId, logUserId) {
+  const resolved = await resolveSessionFromActiveTab(tabId);
+  if (!resolved.ok) return resolved;
 
   const { logLimit } = await chrome.storage.sync.get(DEFAULTS);
-  const data = await listApexLogs(session.apiBase, session.sessionId, logLimit);
+  const data = await listApexLogs(
+    resolved.session.apiBase,
+    resolved.session.sessionId,
+    logLimit,
+    logUserId || null
+  );
   const records = data.records || [];
 
   return {
     ok: true,
-    apiBase: session.apiBase,
+    apiBase: resolved.session.apiBase,
     records: records.map((r) => ({
       id: r.Id,
       application: r.Application,
@@ -96,16 +137,91 @@ async function handleListLogs(tabId) {
   };
 }
 
-async function handleGetLogBody(tabId, logId) {
-  const { url } = await getActiveSalesforceTabId(tabId);
-  if (!url) {
-    return { ok: false, error: "No tab URL available. Open a Salesforce tab first." };
+async function handleListActiveUsers(tabId) {
+  const resolved = await resolveSessionFromActiveTab(tabId);
+  if (!resolved.ok) return resolved;
+
+  const data = await listActiveUsers(resolved.session.apiBase, resolved.session.sessionId);
+  const users = (data.records || []).map((u) => ({
+    id: u.Id,
+    name: u.Name || u.Username || u.Id,
+    username: u.Username || "",
+    userType: u.UserType || "",
+    isAutomatedProcess: String(u.Name || "").toLowerCase() === "automated process",
+  }));
+  users.sort((a, b) => {
+    if (a.isAutomatedProcess && !b.isAutomatedProcess) return -1;
+    if (!a.isAutomatedProcess && b.isAutomatedProcess) return 1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  });
+  return { ok: true, users };
+}
+
+async function handleGetTraceFlagStatus(tabId, userId) {
+  if (!userId) return { ok: false, error: "Missing user id." };
+  const resolved = await resolveSessionFromActiveTab(tabId);
+  if (!resolved.ok) return resolved;
+  const status = await getTraceFlagStatus(
+    resolved.session.apiBase,
+    resolved.session.sessionId,
+    userId
+  );
+  return {
+    ok: true,
+    active: Boolean(status.active),
+    expirationDate: status.traceFlag?.ExpirationDate || null,
+    expiredAt: status.expiredTraceFlag?.ExpirationDate || null,
+  };
+}
+
+async function handleSetTraceFlag(tabId, userId, durationMinutes, debugLevels) {
+  if (!userId) return { ok: false, error: "Missing user id." };
+  const safeDuration = Math.min(Math.max(Number(durationMinutes) || 15, 5), 240);
+  const resolved = await resolveSessionFromActiveTab(tabId);
+  if (!resolved.ok) return resolved;
+  const { apiBase, sessionId } = resolved.session;
+
+  const status = await getTraceFlagStatus(apiBase, sessionId, userId);
+  if (status.active && status.traceFlag?.ExpirationDate) {
+    return {
+      ok: true,
+      created: false,
+      alreadyActive: true,
+      expirationDate: status.traceFlag.ExpirationDate,
+    };
   }
+
+  const debugLevelId = await getOrCreateDebugLevel(apiBase, sessionId, debugLevels || {});
+  if (!debugLevelId) {
+    return { ok: false, error: "Failed to resolve a Debug Level for Trace Flag." };
+  }
+  const created = await createTraceFlag(
+    apiBase,
+    sessionId,
+    userId,
+    debugLevelId,
+    safeDuration
+  );
+
+  const freshStatus = await getTraceFlagStatus(apiBase, sessionId, userId);
+  return {
+    ok: true,
+    created: Boolean(created?.id),
+    traceFlagId: created?.id || null,
+    alreadyActive: false,
+    expirationDate: freshStatus.traceFlag?.ExpirationDate || null,
+  };
+}
+
+async function handleGetLogBody(tabId, logId) {
+  const resolved = await resolveSessionFromActiveTab(tabId);
+  if (!resolved.ok) return resolved;
   if (!logId) return { ok: false, error: "Missing log id." };
 
-  const session = await resolveSession(url);
-  if ("error" in session) return { ok: false, error: session.error };
-
-  const body = await getApexLogBody(session.apiBase, session.sessionId, logId);
+  const body = await getApexLogBody(
+    resolved.session.apiBase,
+    resolved.session.sessionId,
+    logId
+  );
   return { ok: true, body, logId };
 }

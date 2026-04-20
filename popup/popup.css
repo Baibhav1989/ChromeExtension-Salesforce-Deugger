@@ -123,6 +123,56 @@ select {
   max-width: 200px;
 }
 
+.hint--status {
+  margin-top: 0;
+  color: var(--muted);
+}
+
+.hint--status.hint--ok {
+  color: var(--ok);
+}
+
+.hint--status.hint--warn {
+  color: #d08c1b;
+}
+
+.hint--status.hint--error {
+  color: var(--danger);
+}
+
+.debug-levels {
+  margin: 0 14px 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.debug-levels__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.debug-levels__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 8px;
+}
+
+.debug-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.debug-field select {
+  width: 100%;
+}
+
 .list-wrap {
   padding: 0 10px 14px;
   max-height: 420px;

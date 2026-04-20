@@ -2,17 +2,82 @@ const logList = document.getElementById("logList");
 const emptyState = document.getElementById("emptyState");
 const errorState = document.getElementById("errorState");
 const statusBadge = document.getElementById("statusBadge");
+const traceStatus = document.getElementById("traceStatus");
 const btnRefresh = document.getElementById("btnRefresh");
+const btnSetLog = document.getElementById("btnSetLog");
 const refreshSelect = document.getElementById("refreshSelect");
+const traceDurationSelect = document.getElementById("traceDurationSelect");
 const userFilterSelect = document.getElementById("userFilterSelect");
 const linkOptions = document.getElementById("linkOptions");
+const dbgApexCode = document.getElementById("dbgApexCode");
+const dbgApexProfiling = document.getElementById("dbgApexProfiling");
+const dbgCallout = document.getElementById("dbgCallout");
+const dbgDatabase = document.getElementById("dbgDatabase");
+const dbgSystem = document.getElementById("dbgSystem");
+const dbgValidation = document.getElementById("dbgValidation");
+const dbgVisualforce = document.getElementById("dbgVisualforce");
+const dbgWorkflow = document.getElementById("dbgWorkflow");
 
 const FILTER_ALL = "__ALL__";
-const FILTER_AUTOMATED_PROCESS = "__AUTOMATED_PROCESS__";
+const DEBUG_LEVEL_VALUES = [
+  "NONE",
+  "ERROR",
+  "WARN",
+  "INFO",
+  "DEBUG",
+  "FINE",
+  "FINER",
+  "FINEST",
+];
+const DEFAULT_DEBUG_LEVELS = {
+  ApexCode: "DEBUG",
+  ApexProfiling: "INFO",
+  Callout: "INFO",
+  Database: "INFO",
+  System: "DEBUG",
+  Validation: "INFO",
+  Visualforce: "INFO",
+  Workflow: "INFO",
+};
 
 let refreshTimer = null;
 let lastSfTabId = null;
-let allRecords = [];
+
+function initDebugLevelControls() {
+  const fields = [
+    [dbgApexCode, "ApexCode"],
+    [dbgApexProfiling, "ApexProfiling"],
+    [dbgCallout, "Callout"],
+    [dbgDatabase, "Database"],
+    [dbgSystem, "System"],
+    [dbgValidation, "Validation"],
+    [dbgVisualforce, "Visualforce"],
+    [dbgWorkflow, "Workflow"],
+  ];
+  for (const [el, key] of fields) {
+    el.innerHTML = "";
+    for (const level of DEBUG_LEVEL_VALUES) {
+      const opt = document.createElement("option");
+      opt.value = level;
+      opt.textContent = level;
+      if (DEFAULT_DEBUG_LEVELS[key] === level) opt.selected = true;
+      el.appendChild(opt);
+    }
+  }
+}
+
+function getSelectedDebugLevels() {
+  return {
+    ApexCode: dbgApexCode.value || DEFAULT_DEBUG_LEVELS.ApexCode,
+    ApexProfiling: dbgApexProfiling.value || DEFAULT_DEBUG_LEVELS.ApexProfiling,
+    Callout: dbgCallout.value || DEFAULT_DEBUG_LEVELS.Callout,
+    Database: dbgDatabase.value || DEFAULT_DEBUG_LEVELS.Database,
+    System: dbgSystem.value || DEFAULT_DEBUG_LEVELS.System,
+    Validation: dbgValidation.value || DEFAULT_DEBUG_LEVELS.Validation,
+    Visualforce: dbgVisualforce.value || DEFAULT_DEBUG_LEVELS.Visualforce,
+    Workflow: dbgWorkflow.value || DEFAULT_DEBUG_LEVELS.Workflow,
+  };
+}
 
 function isSfUrl(url) {
   if (!url) return false;
@@ -39,6 +104,11 @@ async function getSfTabId() {
   return any?.id ?? null;
 }
 
+function getSelectedUserId() {
+  const value = userFilterSelect.value || FILTER_ALL;
+  return value === FILTER_ALL ? null : value;
+}
+
 function formatTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -56,80 +126,66 @@ function clearList() {
   logList.innerHTML = "";
 }
 
-function createUserFilterOptions(records) {
-  const users = new Map();
-  for (const r of records) {
-    const name = (r.logUserName || "").trim();
-    const id = (r.logUserId || "").trim();
-    if (!name && !id) continue;
-    if (name.toLowerCase() === "automated process") continue;
-    const key = id ? `id:${id}` : `name:${name.toLowerCase()}`;
-    if (!users.has(key)) {
-      users.set(key, name || id);
-    }
-  }
+function showTraceStatus(text, tone) {
+  traceStatus.hidden = false;
+  traceStatus.className = "hint hint--status";
+  if (tone === "ok") traceStatus.classList.add("hint--ok");
+  if (tone === "warn") traceStatus.classList.add("hint--warn");
+  if (tone === "error") traceStatus.classList.add("hint--error");
+  traceStatus.textContent = text;
+}
 
-  const sortedUsers = [...users.entries()].sort((a, b) =>
-    a[1].localeCompare(b[1], undefined, { sensitivity: "base" })
+function hideTraceStatus() {
+  traceStatus.hidden = true;
+  traceStatus.className = "hint hint--status";
+  traceStatus.textContent = "";
+}
+
+function showError(msg) {
+  errorState.textContent = msg;
+  errorState.hidden = false;
+  emptyState.hidden = true;
+}
+
+function hideError() {
+  errorState.hidden = true;
+}
+
+function setBadge(text, ok) {
+  if (!text) {
+    statusBadge.hidden = true;
+    return;
+  }
+  statusBadge.hidden = false;
+  statusBadge.textContent = text;
+  statusBadge.style.color = ok ? "var(--ok)" : "var(--muted)";
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function openDetail(logId) {
+  const tab = lastSfTabId != null ? `&tabId=${lastSfTabId}` : "";
+  const url = chrome.runtime.getURL(
+    `details/details.html?logId=${encodeURIComponent(logId)}${tab}`
   );
-
-  return [
-    { value: FILTER_ALL, label: "All" },
-    { value: FILTER_AUTOMATED_PROCESS, label: "Automated Process" },
-    ...sortedUsers.map(([value, label]) => ({ value, label })),
-  ];
+  chrome.tabs.create({ url });
 }
 
-function renderUserFilterOptions(records) {
-  const previous = userFilterSelect.value || FILTER_ALL;
-  const options = createUserFilterOptions(records);
-  userFilterSelect.innerHTML = "";
-  for (const option of options) {
-    const el = document.createElement("option");
-    el.value = option.value;
-    el.textContent = option.label;
-    userFilterSelect.appendChild(el);
-  }
-
-  const canKeepPrevious = options.some((option) => option.value === previous);
-  userFilterSelect.value = canKeepPrevious ? previous : FILTER_ALL;
-}
-
-function filterRecords(records) {
-  const selected = userFilterSelect.value || FILTER_ALL;
-  if (selected === FILTER_ALL) return records;
-  if (selected === FILTER_AUTOMATED_PROCESS) {
-    return records.filter(
-      (r) => (r.logUserName || "").trim().toLowerCase() === "automated process"
-    );
-  }
-  if (selected.startsWith("id:")) {
-    const selectedId = selected.slice(3);
-    return records.filter((r) => (r.logUserId || "") === selectedId);
-  }
-  if (selected.startsWith("name:")) {
-    const selectedName = selected.slice(5);
-    return records.filter(
-      (r) => (r.logUserName || "").trim().toLowerCase() === selectedName
-    );
-  }
-  return records;
-}
-
-function renderVisibleRecords(visibleRecords) {
-  const badgeText =
-    visibleRecords.length === allRecords.length
-      ? `${allRecords.length} logs`
-      : `${visibleRecords.length}/${allRecords.length} logs`;
-  setBadge(badgeText, true);
-
-  emptyState.textContent = allRecords.length
-    ? "No logs for selected user."
+function renderRecords(records) {
+  setBadge(`${records.length} logs`, true);
+  emptyState.textContent = getSelectedUserId()
+    ? "No logs found for selected user."
     : "No logs loaded yet.";
-  emptyState.hidden = visibleRecords.length > 0;
+  emptyState.hidden = records.length > 0;
   clearList();
 
-  for (const r of visibleRecords) {
+  for (const r of records) {
     const li = document.createElement("li");
     li.className = "log-item";
     li.dataset.logId = r.id;
@@ -161,24 +217,42 @@ function renderVisibleRecords(visibleRecords) {
   }
 }
 
-function showError(msg) {
-  errorState.textContent = msg;
-  errorState.hidden = false;
-  emptyState.hidden = true;
+function formatUserLabel(user) {
+  const type = user.userType ? ` (${user.userType})` : "";
+  return `${user.name}${type}`;
 }
 
-function hideError() {
-  errorState.hidden = true;
+function renderUserOptions(users) {
+  const previous = userFilterSelect.value || FILTER_ALL;
+  userFilterSelect.innerHTML = "";
+
+  const allOption = document.createElement("option");
+  allOption.value = FILTER_ALL;
+  allOption.textContent = "All";
+  userFilterSelect.appendChild(allOption);
+
+  for (const user of users) {
+    const opt = document.createElement("option");
+    opt.value = user.id;
+    opt.textContent = formatUserLabel(user);
+    userFilterSelect.appendChild(opt);
+  }
+
+  const exists = [...userFilterSelect.options].some((opt) => opt.value === previous);
+  userFilterSelect.value = exists ? previous : FILTER_ALL;
+  btnSetLog.disabled = userFilterSelect.value === FILTER_ALL;
 }
 
-function setBadge(text, ok) {
-  if (!text) {
-    statusBadge.hidden = true;
+async function loadActiveUsers() {
+  const tabId = await getSfTabId();
+  if (tabId == null) return;
+  lastSfTabId = tabId;
+  const res = await chrome.runtime.sendMessage({ type: "LIST_ACTIVE_USERS", tabId });
+  if (!res?.ok) {
+    showTraceStatus(res?.error || "Could not load active users.", "error");
     return;
   }
-  statusBadge.hidden = false;
-  statusBadge.textContent = text;
-  statusBadge.style.color = ok ? "var(--ok)" : "var(--muted)";
+  renderUserOptions(res.users || []);
 }
 
 async function loadLogs() {
@@ -190,44 +264,101 @@ async function loadLogs() {
       "No Salesforce tab found. Open Lightning, Setup, or your org in another tab."
     );
     clearList();
-    allRecords = [];
-    renderUserFilterOptions(allRecords);
     setBadge("", false);
     return;
   }
 
   setBadge("Loading…", false);
-  const res = await chrome.runtime.sendMessage({ type: "LIST_LOGS", tabId });
+  const logUserId = getSelectedUserId();
+  const res = await chrome.runtime.sendMessage({ type: "LIST_LOGS", tabId, logUserId });
 
   if (!res?.ok) {
     showError(res?.error || "Failed to load logs.");
     clearList();
-    allRecords = [];
-    renderUserFilterOptions(allRecords);
     setBadge("Error", false);
     return;
   }
 
   hideError();
-  allRecords = res.records || [];
-  renderUserFilterOptions(allRecords);
-  renderVisibleRecords(filterRecords(allRecords));
+  renderRecords(res.records || []);
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+async function refreshTraceStatusForSelection() {
+  const userId = getSelectedUserId();
+  btnSetLog.disabled = !userId;
+  if (!userId) {
+    hideTraceStatus();
+    return;
+  }
+  const tabId = await getSfTabId();
+  if (tabId == null) return;
+  lastSfTabId = tabId;
+  const res = await chrome.runtime.sendMessage({
+    type: "GET_TRACE_FLAG_STATUS",
+    tabId,
+    userId,
+  });
+  if (!res?.ok) {
+    showTraceStatus(res?.error || "Could not read trace status.", "error");
+    return;
+  }
+  if (res.active && res.expirationDate) {
+    showTraceStatus(`Trace already active until ${formatTime(res.expirationDate)}.`, "ok");
+    return;
+  }
+  if (res.expiredAt) {
+    showTraceStatus(
+      `Trace expired at ${formatTime(res.expiredAt)}. Click Set Log to enable again.`,
+      "warn"
+    );
+    return;
+  }
+  showTraceStatus("No active trace for this user. Click Set Log.", "warn");
 }
 
-function openDetail(logId) {
-  const tab = lastSfTabId != null ? `&tabId=${lastSfTabId}` : "";
-  const url = chrome.runtime.getURL(
-    `details/details.html?logId=${encodeURIComponent(logId)}${tab}`
-  );
-  chrome.tabs.create({ url });
+async function setTraceForSelectedUser() {
+  const userId = getSelectedUserId();
+  if (!userId) {
+    showTraceStatus("Select a user first, then click Set Log.", "warn");
+    return;
+  }
+  const tabId = await getSfTabId();
+  if (tabId == null) {
+    showTraceStatus("Open a Salesforce tab first.", "error");
+    return;
+  }
+  lastSfTabId = tabId;
+
+  btnSetLog.disabled = true;
+  const oldText = btnSetLog.textContent;
+  btnSetLog.textContent = "Setting…";
+  const res = await chrome.runtime.sendMessage({
+    type: "SET_TRACE_FLAG",
+    tabId,
+    userId,
+    durationMinutes: Number(traceDurationSelect.value) || 15,
+    debugLevels: getSelectedDebugLevels(),
+  });
+  btnSetLog.textContent = oldText;
+  btnSetLog.disabled = false;
+
+  if (!res?.ok) {
+    showTraceStatus(res?.error || "Failed to set trace flag.", "error");
+    return;
+  }
+
+  if (res.alreadyActive) {
+    showTraceStatus(
+      `Trace already exists and is active until ${formatTime(res.expirationDate)}.`,
+      "ok"
+    );
+  } else {
+    showTraceStatus(
+      `Trace enabled until ${formatTime(res.expirationDate)} for selected user.`,
+      "ok"
+    );
+  }
+  await loadLogs();
 }
 
 function scheduleRefresh() {
@@ -242,13 +373,24 @@ function scheduleRefresh() {
   }, sec * 1000);
 }
 
-btnRefresh.addEventListener("click", () => loadLogs());
+btnRefresh.addEventListener("click", async () => {
+  await loadLogs();
+  await refreshTraceStatusForSelection();
+});
+
+btnSetLog.addEventListener("click", async () => {
+  await setTraceForSelectedUser();
+  await refreshTraceStatusForSelection();
+});
+
 refreshSelect.addEventListener("change", () => {
   chrome.storage.sync.set({ refreshSeconds: Number(refreshSelect.value) });
   scheduleRefresh();
 });
-userFilterSelect.addEventListener("change", () => {
-  renderVisibleRecords(filterRecords(allRecords));
+
+userFilterSelect.addEventListener("change", async () => {
+  await loadLogs();
+  await refreshTraceStatusForSelection();
 });
 
 linkOptions.addEventListener("click", (e) => {
@@ -258,10 +400,14 @@ linkOptions.addEventListener("click", (e) => {
   }
 });
 
-chrome.storage.sync.get({ refreshSeconds: 15, logLimit: 50 }, (cfg) => {
+chrome.storage.sync.get({ refreshSeconds: 15, logLimit: 50 }, async (cfg) => {
+  btnSetLog.disabled = true;
+  initDebugLevelControls();
   const v = String(cfg.refreshSeconds ?? 15);
   const opt = [...refreshSelect.options].find((o) => o.value === v);
-  if (opt) refreshSelect.value = opt.value;
-  else refreshSelect.value = "15";
-  loadLogs().then(scheduleRefresh);
+  refreshSelect.value = opt ? opt.value : "15";
+  await loadActiveUsers();
+  await loadLogs();
+  await refreshTraceStatusForSelection();
+  scheduleRefresh();
 });
