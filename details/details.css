@@ -189,7 +189,8 @@ body.details-page--optimized {
   padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid rgba(92, 230, 193, 0.28);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: var(--surface);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .ai-analysis-panel__header {
@@ -222,14 +223,30 @@ body.details-page--optimized {
   padding: 11px 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.22);
-  color: #d8e4f5;
+  background: #0b1320;
+  color: #e8f0ff;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow: auto;
   max-height: min(38vh, 380px);
+  opacity: 1;
+  filter: none;
+  text-shadow: none;
+}
+
+@media (prefers-color-scheme: light) {
+  .ai-analysis-panel {
+    border-color: rgba(1, 118, 211, 0.22);
+    box-shadow: 0 1px 6px rgba(19, 40, 66, 0.08);
+  }
+
+  .ai-analysis-panel__result {
+    background: #f7faff;
+    color: #1a2a3d;
+    border-color: #c8d5e6;
+  }
 }
 
 .summary {

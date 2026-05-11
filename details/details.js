@@ -98,6 +98,11 @@ let rawText = "";
 /** @type {any} */
 let lastParsed = null;
 let lastAiResult = "";
+let geminiNanoSession = null;
+let geminiNanoSessionPromise = null;
+let legacyGeminiNanoSession = null;
+let legacyGeminiNanoSessionPromise = null;
+let hasShownGeminiNanoDownloadStatus = false;
 
 /** @type {HTMLElement[]} */
 let errorNavNodes = [];
@@ -420,54 +425,94 @@ async function ensureEndpointPermission(endpointUrl) {
 }
 
 async function analyzeWithGeminiNano(prompt, onStatus) {
-  if (typeof globalThis.LanguageModel !== "undefined") {
-    let availability = "unknown";
-    try {
-      availability = await globalThis.LanguageModel.availability({
-        expectedInputs: [{ type: "text", languages: ["en"] }],
-        expectedOutputs: [{ type: "text", languages: ["en"] }],
-      });
-    } catch (error) {
-      logJsError("LanguageModel.availability", error);
-    }
-    if (availability === "unavailable") {
-      throw new Error(
-        "Gemini Nano is unavailable in this Chrome profile/device. Check chrome://on-device-internals and Chrome built-in AI requirements."
-      );
-    }
-    if (availability === "downloadable" || availability === "downloading") {
-      onStatus?.("Preparing Gemini Nano model (downloading if needed)...");
-    }
-    const session = await globalThis.LanguageModel.create({
-      monitor(monitor) {
-        monitor.addEventListener("downloadprogress", (event) => {
-          const pct = Number(event.loaded) * 100;
-          const safePct = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
-          onStatus?.(`Downloading Gemini Nano model… ${safePct.toFixed(0)}%`);
+  async function getLanguageModelSession() {
+    if (geminiNanoSession) return geminiNanoSession;
+    if (geminiNanoSessionPromise) return geminiNanoSessionPromise;
+    geminiNanoSessionPromise = (async () => {
+      let availability = "unknown";
+      try {
+        availability = await globalThis.LanguageModel.availability({
+          expectedInputs: [{ type: "text", languages: ["en"] }],
+          expectedOutputs: [{ type: "text", languages: ["en"] }],
         });
-      },
-    });
+      } catch (error) {
+        logJsError("LanguageModel.availability", error);
+      }
+      if (availability === "unavailable") {
+        throw new Error(
+          "Gemini Nano is unavailable in this Chrome profile/device. Check chrome://on-device-internals and Chrome built-in AI requirements."
+        );
+      }
+      if (
+        !hasShownGeminiNanoDownloadStatus &&
+        (availability === "downloadable" || availability === "downloading")
+      ) {
+        onStatus?.("Preparing Gemini Nano model (downloading if needed)...");
+      }
+      const session = await globalThis.LanguageModel.create({
+        monitor(monitor) {
+          monitor.addEventListener("downloadprogress", (event) => {
+            hasShownGeminiNanoDownloadStatus = true;
+            const pct = Number(event.loaded) * 100;
+            const safePct = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+            onStatus?.(`Downloading Gemini Nano model… ${safePct.toFixed(0)}%`);
+          });
+        },
+      });
+      hasShownGeminiNanoDownloadStatus = true;
+      geminiNanoSession = session;
+      return session;
+    })();
     try {
+      return await geminiNanoSessionPromise;
+    } finally {
+      geminiNanoSessionPromise = null;
+    }
+  }
+
+  async function getLegacyWindowAiSession() {
+    if (legacyGeminiNanoSession) return legacyGeminiNanoSession;
+    if (legacyGeminiNanoSessionPromise) return legacyGeminiNanoSessionPromise;
+    legacyGeminiNanoSessionPromise = (async () => {
+      const session = await window.ai.languageModel.create({
+        temperature: 0.2,
+        topK: 4,
+      });
+      legacyGeminiNanoSession = session;
+      return session;
+    })();
+    try {
+      return await legacyGeminiNanoSessionPromise;
+    } finally {
+      legacyGeminiNanoSessionPromise = null;
+    }
+  }
+
+  if (typeof globalThis.LanguageModel !== "undefined") {
+    try {
+      const session = await getLanguageModelSession();
       const result = await session.prompt(prompt);
       return String(result || "").trim();
-    } finally {
-      if (typeof session.destroy === "function") {
-        await session.destroy();
+    } catch (error) {
+      // If the cached session becomes stale, reset and allow re-create next call.
+      const msg = String(error?.message || error);
+      if (/destroy|closed|invalid/i.test(msg)) {
+        geminiNanoSession = null;
       }
+      throw error;
     }
   }
   if (window.ai?.languageModel?.create) {
-    const session = await window.ai.languageModel.create({
-      temperature: 0.2,
-      topK: 4,
-    });
     try {
+      const session = await getLegacyWindowAiSession();
       const result = await session.prompt(prompt);
       return String(result || "").trim();
-    } finally {
-      if (typeof session.destroy === "function") {
-        await session.destroy();
+    } catch (error) {
+      const msg = String(error?.message || error);
+      if (/destroy|closed|invalid/i.test(msg)) {
+        legacyGeminiNanoSession = null;
       }
+      throw error;
     }
   }
   if (window.ai?.assistant?.create) {
@@ -482,6 +527,17 @@ async function analyzeWithGeminiNano(prompt, onStatus) {
     "Gemini Nano API is not detected in this context. Update Chrome and ensure built-in AI is enabled and supported by your device."
   );
 }
+
+window.addEventListener("beforeunload", () => {
+  if (geminiNanoSession && typeof geminiNanoSession.destroy === "function") {
+    geminiNanoSession.destroy().catch((error) => logJsError("destroy geminiNanoSession", error));
+  }
+  if (legacyGeminiNanoSession && typeof legacyGeminiNanoSession.destroy === "function") {
+    legacyGeminiNanoSession
+      .destroy()
+      .catch((error) => logJsError("destroy legacyGeminiNanoSession", error));
+  }
+});
 
 async function analyzeWithGeminiApi(prompt, settings) {
   if (!settings.apiKey) {
