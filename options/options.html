@@ -59,6 +59,15 @@
               <option value="240">240</option>
             </select>
           </label>
+          <div class="settings-field settings-field--switch">
+            <span class="settings-field__label">Open debugger as full tab</span>
+            <span class="settings-field__hint">When enabled, clicking the extension opens a full browser tab.</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="openModeTab" />
+              <span class="toggle-switch__track" aria-hidden="true"></span>
+              <span class="toggle-switch__label">Enable full tab mode</span>
+            </label>
+          </div>
         </div>
       </section>
 
@@ -83,6 +92,60 @@
           <label class="settings-debug-pair" for="dbgWorkflow"><span>Workflow</span></label>
           <select id="dbgWorkflow" class="settings-field__select settings-field__select--compact"></select>
         </div>
+      </section>
+      <section class="settings-card">
+        <h2 class="settings-card__title">AI log analysis</h2>
+        <p class="settings-card__lead">
+          Used by <strong>Analyze with AI</strong> in details view. Gemini Nano is default.
+        </p>
+        <div class="settings-fields">
+          <label class="settings-field">
+            <span class="settings-field__label">AI provider</span>
+            <select id="aiProvider" class="settings-field__select">
+              <option value="gemini-nano">Gemini Nano (on-device, default)</option>
+              <option value="gemini-api">Gemini API (Google key)</option>
+              <option value="openai-compatible">Custom OpenAI-compatible API</option>
+              <option value="agentforce">Agentforce AI</option>
+            </select>
+          </label>
+          <label class="settings-field" id="aiModelField">
+            <span class="settings-field__label">Model / deployment name</span>
+            <span class="settings-field__hint">Examples: gemini-2.0-flash, gpt-4.1-mini, my-agentforce-model</span>
+            <input type="text" id="aiModel" class="settings-field__input" placeholder="Model or deployment" />
+          </label>
+          <label class="settings-field" id="aiApiKeyField">
+            <span class="settings-field__label">API key / token</span>
+            <span class="settings-field__hint">Stored in extension settings for AI requests.</span>
+            <input
+              type="password"
+              id="aiApiKey"
+              class="settings-field__input"
+              autocomplete="off"
+              placeholder="Paste API key"
+            />
+          </label>
+          <label class="settings-field" id="aiEndpointField">
+            <span class="settings-field__label">Endpoint URL</span>
+            <span class="settings-field__hint">Required for custom provider and Agentforce mode.</span>
+            <input
+              type="url"
+              id="aiEndpoint"
+              class="settings-field__input"
+              placeholder="https://api.example.com/v1/chat/completions"
+            />
+          </label>
+          <label class="settings-field" id="aiAgentforceOrgField">
+            <span class="settings-field__label">Agentforce org base URL (optional)</span>
+            <span class="settings-field__hint">Used as helper context for Agentforce configuration.</span>
+            <input
+              type="url"
+              id="aiAgentforceOrgUrl"
+              class="settings-field__input"
+              placeholder="https://your-org.my.salesforce.com"
+            />
+          </label>
+        </div>
+        <p class="settings-ai-note" id="aiProviderNote"></p>
       </section>
     </div>
 

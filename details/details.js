@@ -7,6 +7,11 @@ import {
   renderLogTableHtml,
   saveLogFilters,
 } from "../lib/log-formatter.js";
+import {
+  SETTINGS_STORAGE_DEFAULTS,
+  normalizeAiProvider,
+  sanitizeAiText,
+} from "../lib/extension-settings.js";
 
 const OPTIMIZE_LOG_STORAGE_KEY = "logViewerOptimizeLog";
 
@@ -73,7 +78,12 @@ const soqlNavNext = document.getElementById("soqlNavNext");
 const soqlNavPosition = document.getElementById("soqlNavPosition");
 const btnCopy = document.getElementById("btnCopy");
 const btnReload = document.getElementById("btnReload");
+const btnAnalyzeAi = document.getElementById("btnAnalyzeAi");
 const btnClose = document.getElementById("btnClose");
+const aiAnalysisPanel = document.getElementById("aiAnalysisPanel");
+const aiAnalysisStatus = document.getElementById("aiAnalysisStatus");
+const aiAnalysisResult = document.getElementById("aiAnalysisResult");
+const aiAnalysisMeta = document.getElementById("aiAnalysisMeta");
 const extensionVersion = document.getElementById("extension-version");
 
 const filterAll = document.getElementById("filterAll");
@@ -87,6 +97,7 @@ const logFilters = document.getElementById("logFilters");
 let rawText = "";
 /** @type {any} */
 let lastParsed = null;
+let lastAiResult = "";
 
 /** @type {HTMLElement[]} */
 let errorNavNodes = [];
@@ -276,6 +287,257 @@ function applyViewMode() {
   }
 }
 
+function setAiPanelState(statusText, resultText = "", metaText = "") {
+  if (!aiAnalysisPanel || !aiAnalysisStatus || !aiAnalysisResult || !aiAnalysisMeta) return;
+  aiAnalysisPanel.hidden = false;
+  aiAnalysisStatus.textContent = statusText || "";
+  aiAnalysisMeta.textContent = metaText || "";
+  aiAnalysisResult.textContent = resultText || "";
+}
+
+async function readAiSettings() {
+  const cfg = await chrome.storage.sync.get(SETTINGS_STORAGE_DEFAULTS);
+  return {
+    provider: normalizeAiProvider(cfg.aiProvider),
+    model: sanitizeAiText(cfg.aiModel, SETTINGS_STORAGE_DEFAULTS.aiModel),
+    apiKey: sanitizeAiText(cfg.aiApiKey),
+    endpoint: sanitizeAiText(cfg.aiEndpoint),
+    agentforceOrgUrl: sanitizeAiText(cfg.aiAgentforceOrgUrl),
+  };
+}
+
+function trimLogForPrompt(text) {
+  const maxChars = 22000;
+  if (text.length <= maxChars) return text;
+  const head = text.slice(0, 16000);
+  const tail = text.slice(-5000);
+  return `${head}\n\n...[truncated ${text.length - maxChars} chars]...\n\n${tail}`;
+}
+
+function buildAiPrompt(logText) {
+  const lines = logText.split(/\r?\n/).length;
+  const summary = lastParsed?.summary || {};
+  return [
+    "You are a senior Salesforce Apex debugging assistant.",
+    "Analyze the log and respond in plain text with these sections:",
+    "1) Executive summary",
+    "2) Primary error/root cause",
+    "3) SOQL and governor-risk observations",
+    "4) Concrete fix steps",
+    "5) Validation checklist",
+    "",
+    `Log metadata: totalLines=${lines}, parsedErrors=${summary.errors ?? "unknown"}, parsedSoql=${summary.soql ?? "unknown"}`,
+    "",
+    "Debug log:",
+    trimLogForPrompt(logText),
+  ].join("\n");
+}
+
+function extractAiTextFromResponse(data) {
+  if (!data) return "";
+  if (typeof data === "string") return data;
+  if (Array.isArray(data?.candidates)) {
+    const parts = data.candidates
+      .flatMap((c) => c?.content?.parts || [])
+      .map((p) => p?.text)
+      .filter(Boolean);
+    if (parts.length) return parts.join("\n");
+  }
+  if (Array.isArray(data?.choices) && data.choices[0]?.message?.content) {
+    const content = data.choices[0].message.content;
+    if (Array.isArray(content)) {
+      return content
+        .map((part) => (typeof part === "string" ? part : part?.text || ""))
+        .filter(Boolean)
+        .join("\n");
+    }
+    return String(content);
+  }
+  if (typeof data?.output_text === "string" && data.output_text) {
+    return data.output_text;
+  }
+  if (Array.isArray(data?.content)) {
+    const text = data.content
+      .map((part) => part?.text || "")
+      .filter(Boolean)
+      .join("\n");
+    if (text) return text;
+  }
+  return "";
+}
+
+async function ensureEndpointPermission(endpointUrl) {
+  if (!chrome.permissions?.contains || !chrome.permissions?.request) return;
+  let originPattern;
+  try {
+    const u = new URL(endpointUrl);
+    if (!/^https?:$/.test(u.protocol)) {
+      throw new Error("Endpoint must start with http:// or https://");
+    }
+    originPattern = `${u.protocol}//${u.hostname}/*`;
+  } catch (error) {
+    throw new Error(`Invalid endpoint URL: ${error?.message || String(error)}`);
+  }
+  const alreadyAllowed = await chrome.permissions.contains({ origins: [originPattern] });
+  if (alreadyAllowed) return;
+  const granted = await chrome.permissions.request({ origins: [originPattern] });
+  if (!granted) {
+    throw new Error(`Permission denied for ${originPattern}. Enable access to use this provider.`);
+  }
+}
+
+async function analyzeWithGeminiNano(prompt) {
+  if (window.ai?.languageModel?.create) {
+    const session = await window.ai.languageModel.create({
+      temperature: 0.2,
+      topK: 4,
+    });
+    try {
+      const result = await session.prompt(prompt);
+      return String(result || "").trim();
+    } finally {
+      if (typeof session.destroy === "function") {
+        await session.destroy();
+      }
+    }
+  }
+  if (window.ai?.assistant?.create) {
+    const assistant = await window.ai.assistant.create();
+    const response = await assistant.prompt(prompt);
+    if (typeof assistant.destroy === "function") {
+      await assistant.destroy();
+    }
+    return String(response || "").trim();
+  }
+  throw new Error(
+    "Gemini Nano is not available in this browser/profile. Choose Gemini API or custom provider in settings."
+  );
+}
+
+async function analyzeWithGeminiApi(prompt, settings) {
+  if (!settings.apiKey) {
+    throw new Error("Gemini API key missing. Add it in extension settings.");
+  }
+  const model = settings.model || SETTINGS_STORAGE_DEFAULTS.aiModel;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model
+  )}:generateContent?key=${encodeURIComponent(settings.apiKey)}`;
+  await ensureEndpointPermission(endpoint);
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.2,
+      },
+    }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = data?.error?.message || data?.message || `HTTP ${res.status}`;
+    throw new Error(String(msg));
+  }
+  const text = extractAiTextFromResponse(data);
+  if (!text) throw new Error("Gemini API returned an empty response.");
+  return text.trim();
+}
+
+async function analyzeWithOpenAiCompatible(prompt, settings) {
+  if (!settings.endpoint) {
+    throw new Error("Endpoint URL missing. Configure endpoint in settings.");
+  }
+  if (!settings.apiKey) {
+    throw new Error("API key/token missing. Add it in settings.");
+  }
+  await ensureEndpointPermission(settings.endpoint);
+  const res = await fetch(settings.endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${settings.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: settings.model || SETTINGS_STORAGE_DEFAULTS.aiModel,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content: "You are a Salesforce Apex debug log analysis assistant.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = data?.error?.message || data?.message || `HTTP ${res.status}`;
+    throw new Error(String(msg));
+  }
+  const text = extractAiTextFromResponse(data);
+  if (!text) throw new Error("The configured AI endpoint returned no text.");
+  return text.trim();
+}
+
+async function runAiAnalysis() {
+  if (!rawText) {
+    setAiPanelState("Load the log first, then run analysis.");
+    return;
+  }
+  const settings = await readAiSettings();
+  if (settings.provider === "agentforce" && !settings.endpoint && settings.agentforceOrgUrl) {
+    settings.endpoint = `${settings.agentforceOrgUrl.replace(
+      /\/+$/,
+      ""
+    )}/services/data/v61.0/einstein/ai/chat/completions`;
+  }
+  const providerLabel = {
+    "gemini-nano": "Gemini Nano",
+    "gemini-api": "Gemini API",
+    "openai-compatible": "Custom OpenAI-compatible",
+    agentforce: "Agentforce",
+  }[settings.provider];
+  const modelLabel =
+    settings.provider === "gemini-nano" ? "On-device model" : settings.model || "Configured model";
+
+  const prompt = buildAiPrompt(rawText);
+  setAiPanelState("Analyzing log with AI...", "", `${providerLabel} · ${modelLabel}`);
+  if (btnAnalyzeAi) {
+    btnAnalyzeAi.disabled = true;
+    btnAnalyzeAi.textContent = "Analyzing…";
+  }
+
+  try {
+    let responseText = "";
+    if (settings.provider === "gemini-nano") {
+      responseText = await analyzeWithGeminiNano(prompt);
+    } else if (settings.provider === "gemini-api") {
+      responseText = await analyzeWithGeminiApi(prompt, settings);
+    } else {
+      responseText = await analyzeWithOpenAiCompatible(prompt, settings);
+    }
+    lastAiResult = responseText;
+    setAiPanelState("Analysis complete.", responseText, `${providerLabel} · ${modelLabel}`);
+  } catch (error) {
+    logJsError("runAiAnalysis", error);
+    setAiPanelState(
+      `Analysis failed: ${error?.message || String(error)}`,
+      lastAiResult,
+      `${providerLabel} · ${modelLabel}`
+    );
+  } finally {
+    if (btnAnalyzeAi) {
+      btnAnalyzeAi.disabled = false;
+      btnAnalyzeAi.textContent = "Analyze with AI";
+    }
+  }
+}
+
 filterAll.addEventListener("change", () => {
   const on = filterAll.checked;
   filterDebug.checked = on;
@@ -389,6 +651,10 @@ async function fetchLog() {
   hideErrorBanner();
   summary.hidden = true;
   logMain.hidden = true;
+  if (aiAnalysisPanel) {
+    aiAnalysisPanel.hidden = true;
+  }
+  lastAiResult = "";
 
   const res = await chrome.runtime.sendMessage({
     type: "GET_LOG_BODY",
@@ -434,6 +700,12 @@ btnCopy.addEventListener("click", async () => {
 });
 
 btnReload.addEventListener("click", () => fetchLog());
+
+if (btnAnalyzeAi) {
+  btnAnalyzeAi.addEventListener("click", () => {
+    runAiAnalysis();
+  });
+}
 
 btnClose.addEventListener("click", (e) => {
   e.preventDefault();

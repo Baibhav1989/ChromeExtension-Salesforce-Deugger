@@ -20,6 +20,7 @@
           <input type="checkbox" id="chkOptimizeLog" />
           <span>Optimize log</span>
         </label>
+        <button type="button" class="btn btn--ai" id="btnAnalyzeAi">Analyze with AI</button>
         <button type="button" class="btn" id="btnCopy">Copy raw log</button>
         <button type="button" class="btn btn--primary" id="btnReload">Reload</button>
       </div>
@@ -27,6 +28,14 @@
 
     <section class="banner banner--loading" id="bannerLoading">Loading log…</section>
     <section class="banner banner--error" id="bannerError" hidden></section>
+    <section class="ai-analysis-panel" id="aiAnalysisPanel" hidden>
+      <div class="ai-analysis-panel__header">
+        <h2 class="ai-analysis-panel__title">AI analysis</h2>
+        <span class="ai-analysis-panel__meta" id="aiAnalysisMeta"></span>
+      </div>
+      <p class="ai-analysis-panel__status" id="aiAnalysisStatus"></p>
+      <pre class="ai-analysis-panel__result" id="aiAnalysisResult"></pre>
+    </section>
 
     <section class="summary" id="summary" hidden>
       <div class="summary__grid">

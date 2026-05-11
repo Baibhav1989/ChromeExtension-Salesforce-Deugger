@@ -6,6 +6,9 @@ import {
   applyDebugLevelsToSelects,
   clampLogLimit,
   clampTraceMinutes,
+  normalizeOpenMode,
+  normalizeAiProvider,
+  sanitizeAiText,
 } from "../lib/extension-settings.js";
 
 const logList = document.getElementById("logList");
@@ -33,6 +36,8 @@ const settingsOverlay = document.getElementById("settingsOverlay");
 const btnCloseSettings = document.getElementById("btnCloseSettings");
 const settLogLimit = document.getElementById("settLogLimit");
 const settRefreshSeconds = document.getElementById("settRefreshSeconds");
+const openModeToggle = document.getElementById("openModeToggle");
+const settOpenModeTab = document.getElementById("settOpenModeTab");
 const settTraceDurationMinutes = document.getElementById("settTraceDurationMinutes");
 const settSavedHint = document.getElementById("settSavedHint");
 const settDbgApexCode = document.getElementById("settDbgApexCode");
@@ -43,10 +48,23 @@ const settDbgSystem = document.getElementById("settDbgSystem");
 const settDbgValidation = document.getElementById("settDbgValidation");
 const settDbgVisualforce = document.getElementById("settDbgVisualforce");
 const settDbgWorkflow = document.getElementById("settDbgWorkflow");
+const settAiProvider = document.getElementById("settAiProvider");
+const settAiModel = document.getElementById("settAiModel");
+const settAiApiKey = document.getElementById("settAiApiKey");
+const settAiEndpoint = document.getElementById("settAiEndpoint");
+const settAiAgentforceOrgUrl = document.getElementById("settAiAgentforceOrgUrl");
+const settAiModelField = document.getElementById("settAiModelField");
+const settAiApiKeyField = document.getElementById("settAiApiKeyField");
+const settAiEndpointField = document.getElementById("settAiEndpointField");
+const settAiAgentforceOrgField = document.getElementById("settAiAgentforceOrgField");
+const settAiProviderNote = document.getElementById("settAiProviderNote");
 const extensionVersion = document.getElementById("extension-version");
 const chkSelectAllLogs = document.getElementById("chkSelectAllLogs");
 const btnClearSelected = document.getElementById("btnClearSelected");
 const btnClearAllLogs = document.getElementById("btnClearAllLogs");
+
+const queryParams = new URLSearchParams(window.location.search);
+const isFullTabView = queryParams.get("view") === "tab";
 
 const FILTER_ALL = "__ALL__";
 
@@ -64,6 +82,10 @@ if (extensionVersion) {
   extensionVersion.textContent = `v${chrome.runtime.getManifest().version}`;
 }
 
+if (isFullTabView) {
+  document.body.classList.add("popup-mode--tab");
+}
+
 function logJsError(context, error) {
   const message = error?.stack || error?.message || String(error);
   console.log(`[SF Debugger][${context}] ${message}`, error);
@@ -76,6 +98,82 @@ window.addEventListener("error", (event) => {
 window.addEventListener("unhandledrejection", (event) => {
   logJsError("popup unhandled rejection", event.reason);
 });
+
+function getFullTabUrl() {
+  return chrome.runtime.getURL("popup/popup.html?view=tab");
+}
+
+async function maybeOpenFullTabFromPreference() {
+  if (isFullTabView) return true;
+  try {
+    const cfg = await chrome.storage.sync.get({
+      openMode: SETTINGS_STORAGE_DEFAULTS.openMode,
+    });
+    if (normalizeOpenMode(cfg.openMode) !== "tab") return true;
+    await chrome.tabs.create({ url: getFullTabUrl() });
+    window.close();
+    return false;
+  } catch (error) {
+    logJsError("maybeOpenFullTabFromPreference", error);
+    return true;
+  }
+}
+
+async function persistOpenMode(openMode) {
+  const nextMode = normalizeOpenMode(openMode);
+  await chrome.storage.sync.set({ openMode: nextMode });
+  const asTab = nextMode === "tab";
+  if (openModeToggle) openModeToggle.checked = asTab;
+  if (settOpenModeTab) settOpenModeTab.checked = asTab;
+}
+
+async function handleOpenModeToggleChange(enabled) {
+  const openMode = enabled ? "tab" : "popup";
+  try {
+    await persistOpenMode(openMode);
+    if (enabled && !isFullTabView) {
+      await chrome.tabs.create({ url: getFullTabUrl() });
+      window.close();
+    } else if (!enabled && isFullTabView) {
+      showTraceStatus("Full tab mode disabled. Next toolbar click opens compact popup.", "ok");
+    }
+  } catch (error) {
+    logJsError("handleOpenModeToggleChange", error);
+    showTraceStatus("Could not save open mode preference.", "error");
+  }
+}
+
+function updateAiSettingsVisibility() {
+  const provider = normalizeAiProvider(settAiProvider?.value);
+  const isNano = provider === "gemini-nano";
+  const isGeminiApi = provider === "gemini-api";
+  const isOpenAiCompat = provider === "openai-compatible";
+  const isAgentforce = provider === "agentforce";
+
+  if (settAiModelField) settAiModelField.hidden = isNano;
+  if (settAiApiKeyField) settAiApiKeyField.hidden = isNano;
+  if (settAiEndpointField) settAiEndpointField.hidden = !(isOpenAiCompat || isAgentforce);
+  if (settAiAgentforceOrgField) settAiAgentforceOrgField.hidden = !isAgentforce;
+
+  if (!settAiProviderNote) return;
+  if (isNano) {
+    settAiProviderNote.textContent =
+      "Gemini Nano runs on-device when available. If your browser/device does not expose Nano APIs, switch provider.";
+    return;
+  }
+  if (isGeminiApi) {
+    settAiProviderNote.textContent =
+      "Gemini API uses your Google API key and model name (for example: gemini-2.0-flash).";
+    return;
+  }
+  if (isAgentforce) {
+    settAiProviderNote.textContent =
+      "Agentforce mode uses your provided endpoint, model/deployment, token, and optional org URL context.";
+    return;
+  }
+  settAiProviderNote.textContent =
+    "OpenAI-compatible mode sends chat-completion requests to your custom endpoint.";
+}
 
 async function getConfiguredDebugLevels() {
   try {
@@ -766,6 +864,19 @@ btnRemoveLog.addEventListener("click", async () => {
   await removeTraceForSelectedUser();
 });
 
+if (openModeToggle) {
+  openModeToggle.addEventListener("change", async () => {
+    await handleOpenModeToggleChange(openModeToggle.checked);
+  });
+}
+
+if (settOpenModeTab) {
+  settOpenModeTab.addEventListener("change", async () => {
+    await handleOpenModeToggleChange(settOpenModeTab.checked);
+    saveSettingsOverlay();
+  });
+}
+
 refreshSelect.addEventListener("change", () => {
   chrome.storage.sync.set({ refreshSeconds: Number(refreshSelect.value) });
   scheduleRefresh();
@@ -887,6 +998,9 @@ function loadSettingsOverlayFromStorage() {
     { ...SETTINGS_STORAGE_DEFAULTS, debugLevels: DEFAULT_DEBUG_LEVELS },
     (cfg) => {
       if (settLogLimit) settLogLimit.value = String(clampLogLimit(cfg.logLimit));
+      const openMode = normalizeOpenMode(cfg.openMode);
+      if (settOpenModeTab) settOpenModeTab.checked = openMode === "tab";
+      if (openModeToggle) openModeToggle.checked = openMode === "tab";
       if (settRefreshSeconds) {
         const v = String(
           cfg.refreshSeconds ?? SETTINGS_STORAGE_DEFAULTS.refreshSeconds
@@ -903,7 +1017,23 @@ function loadSettingsOverlayFromStorage() {
         const ok = [...settTraceDurationMinutes.options].some((o) => o.value === v);
         settTraceDurationMinutes.value = ok ? v : "15";
       }
+      if (settAiProvider) {
+        settAiProvider.value = normalizeAiProvider(cfg.aiProvider);
+      }
+      if (settAiModel) {
+        settAiModel.value = sanitizeAiText(cfg.aiModel, SETTINGS_STORAGE_DEFAULTS.aiModel);
+      }
+      if (settAiApiKey) {
+        settAiApiKey.value = sanitizeAiText(cfg.aiApiKey);
+      }
+      if (settAiEndpoint) {
+        settAiEndpoint.value = sanitizeAiText(cfg.aiEndpoint);
+      }
+      if (settAiAgentforceOrgUrl) {
+        settAiAgentforceOrgUrl.value = sanitizeAiText(cfg.aiAgentforceOrgUrl);
+      }
       applyDebugLevelsToSelects(getSettingsDebugFieldPairs(), cfg.debugLevels);
+      updateAiSettingsVisibility();
     }
   );
 }
@@ -921,17 +1051,32 @@ function saveSettingsOverlay() {
   const refreshSeconds = Number(settRefreshSeconds?.value);
   const traceDurationMinutes = clampTraceMinutes(settTraceDurationMinutes?.value);
   const debugLevels = readDebugLevelsFromSelects(getSettingsDebugFieldPairs());
+  const openMode = settOpenModeTab?.checked ? "tab" : "popup";
+  const aiProvider = normalizeAiProvider(settAiProvider?.value);
+  const aiModel = sanitizeAiText(settAiModel?.value, SETTINGS_STORAGE_DEFAULTS.aiModel);
+  const aiApiKey = sanitizeAiText(settAiApiKey?.value);
+  const aiEndpoint = sanitizeAiText(settAiEndpoint?.value);
+  const aiAgentforceOrgUrl = sanitizeAiText(settAiAgentforceOrgUrl?.value);
   chrome.storage.sync.set(
     {
       logLimit,
+      openMode,
       refreshSeconds: Number.isFinite(refreshSeconds)
         ? refreshSeconds
         : SETTINGS_STORAGE_DEFAULTS.refreshSeconds,
       traceDurationMinutes,
       debugLevels,
+      aiProvider,
+      aiModel,
+      aiApiKey,
+      aiEndpoint,
+      aiAgentforceOrgUrl,
     },
     () => {
       showSettingsSavedHint();
+      if (openModeToggle) {
+        openModeToggle.checked = openMode === "tab";
+      }
       if (refreshSelect && settRefreshSeconds) {
         const v = settRefreshSeconds.value;
         const opt = [...refreshSelect.options].find((o) => o.value === v);
@@ -972,6 +1117,13 @@ document.addEventListener("keydown", (e) => {
   closeSettingsOverlay();
 });
 
+if (settAiProvider) {
+  settAiProvider.addEventListener("change", () => {
+    updateAiSettingsVisibility();
+    saveSettingsOverlay();
+  });
+}
+
 for (const el of [
   settLogLimit,
   settRefreshSeconds,
@@ -984,20 +1136,37 @@ for (const el of [
   settDbgValidation,
   settDbgVisualforce,
   settDbgWorkflow,
+  settAiModel,
+  settAiApiKey,
+  settAiEndpoint,
+  settAiAgentforceOrgUrl,
 ]) {
   el?.addEventListener("change", saveSettingsOverlay);
 }
 
-chrome.storage.sync.get(SETTINGS_STORAGE_DEFAULTS, async (cfg) => {
+async function initPopup() {
+  const shouldContinue = await maybeOpenFullTabFromPreference();
+  if (!shouldContinue) return;
+  const cfg = await chrome.storage.sync.get(SETTINGS_STORAGE_DEFAULTS);
+  const openMode = normalizeOpenMode(cfg.openMode);
+  if (openModeToggle) openModeToggle.checked = openMode === "tab";
+  if (settOpenModeTab) settOpenModeTab.checked = openMode === "tab";
+  updateAiSettingsVisibility();
+
   btnSetLog.disabled = true;
   btnRemoveLog.disabled = true;
   btnRemoveLog.title = REMOVE_LOG_TITLE_NEED_USER;
-  const v = String(cfg.refreshSeconds ?? 15);
+  const v = String(cfg.refreshSeconds ?? SETTINGS_STORAGE_DEFAULTS.refreshSeconds);
   const opt = [...refreshSelect.options].find((o) => o.value === v);
-  refreshSelect.value = opt ? opt.value : "15";
+  refreshSelect.value = opt ? opt.value : String(SETTINGS_STORAGE_DEFAULTS.refreshSeconds);
   await restoreDefaultTraceUserSelection();
   await loadActiveUsers();
   await loadLogs();
   await refreshTraceStatusForSelection();
   scheduleRefresh();
+}
+
+initPopup().catch((error) => {
+  logJsError("initPopup", error);
+  showError("Failed to initialize popup. Check console logs.");
 });

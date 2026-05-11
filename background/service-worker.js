@@ -12,7 +12,18 @@ import {
   searchUsers,
 } from "./sf-api.js";
 
-const DEFAULTS = { logLimit: 50, refreshSeconds: 15, traceDurationMinutes: 15 };
+const DEFAULTS = {
+  logLimit: 50,
+  refreshSeconds: 15,
+  traceDurationMinutes: 15,
+  openMode: "popup",
+  aiProvider: "gemini-nano",
+  aiModel: "gemini-2.0-flash-lite",
+  aiApiKey: "",
+  aiEndpoint: "",
+  aiAgentforceOrgUrl: "",
+};
+const POPUP_PATH = "popup/popup.html";
 
 function logJsError(context, error) {
   const message = error?.stack || error?.message || String(error);
@@ -29,9 +40,30 @@ self.addEventListener("unhandledrejection", (event) => {
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(DEFAULTS, (stored) => {
-    chrome.storage.sync.set({ ...DEFAULTS, ...stored });
+    chrome.storage.sync.set({ ...DEFAULTS, ...stored }, () => {
+      syncActionBehaviorFromSettings();
+    });
   });
 });
+
+chrome.runtime.onStartup?.addListener(() => {
+  syncActionBehaviorFromSettings();
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "sync") return;
+  if (!changes?.openMode) return;
+  syncActionBehaviorFromSettings();
+});
+
+chrome.action.onClicked.addListener(async () => {
+  const cfg = await chrome.storage.sync.get({ openMode: DEFAULTS.openMode });
+  const mode = cfg.openMode === "tab" ? "tab" : "popup";
+  if (mode !== "tab") return;
+  await chrome.tabs.create({ url: chrome.runtime.getURL("popup/popup.html?view=tab") });
+});
+
+syncActionBehaviorFromSettings();
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "LIST_LOGS") {
@@ -147,6 +179,18 @@ function isSalesforceUrl(url) {
     );
   } catch {
     return false;
+  }
+}
+
+async function syncActionBehaviorFromSettings() {
+  try {
+    const cfg = await chrome.storage.sync.get({ openMode: DEFAULTS.openMode });
+    const mode = cfg.openMode === "tab" ? "tab" : "popup";
+    await chrome.action.setPopup({
+      popup: mode === "tab" ? "" : POPUP_PATH,
+    });
+  } catch (error) {
+    logJsError("syncActionBehaviorFromSettings", error);
   }
 }
 

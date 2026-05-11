@@ -46,6 +46,10 @@
         <span class="header__count" id="statusBadge" hidden role="status" aria-live="polite"></span>
       </div>
       <div class="header__actions">
+        <label class="view-mode-toggle" title="Open extension as full tab">
+          <input type="checkbox" id="openModeToggle" />
+          <span>Full tab</span>
+        </label>
         <button type="button" class="btn btn--ghost btn--header" id="btnRefresh" title="Refresh now">
           Refresh
         </button>
@@ -167,6 +171,17 @@
                   <option value="60">60 s</option>
                 </select>
               </label>
+              <div class="settings-field settings-field--switch">
+                <span class="settings-field__label">Open debugger as full tab</span>
+                <span class="settings-field__hint"
+                  >When enabled, clicking the extension opens this interface in a complete browser tab.</span
+                >
+                <label class="toggle-switch">
+                  <input type="checkbox" id="settOpenModeTab" />
+                  <span class="toggle-switch__track" aria-hidden="true"></span>
+                  <span class="toggle-switch__label">Enable full tab mode</span>
+                </label>
+              </div>
               <label class="settings-field">
                 <span class="settings-field__label"
                   >Trace duration (Set Log)
@@ -209,6 +224,66 @@
               <label class="settings-debug-pair" for="settDbgWorkflow"><span>Workflow</span></label>
               <select id="settDbgWorkflow" class="settings-field__select settings-field__select--compact"></select>
             </div>
+          </section>
+          <section class="settings-card">
+            <h3 class="settings-card__title">AI log analysis</h3>
+            <p class="settings-card__lead">
+              Used by <strong>Analyze with AI</strong> in log details. Gemini Nano is default and works without API
+              key when available.
+            </p>
+            <div class="settings-fields">
+              <label class="settings-field">
+                <span class="settings-field__label">AI provider</span>
+                <select id="settAiProvider" class="settings-field__select">
+                  <option value="gemini-nano">Gemini Nano (on-device, default)</option>
+                  <option value="gemini-api">Gemini API (Google key)</option>
+                  <option value="openai-compatible">Custom OpenAI-compatible API</option>
+                  <option value="agentforce">Agentforce AI</option>
+                </select>
+              </label>
+              <label class="settings-field" id="settAiModelField">
+                <span class="settings-field__label">Model / deployment name</span>
+                <span class="settings-field__hint">Examples: gemini-2.0-flash, gpt-4.1-mini, my-agentforce-model</span>
+                <input
+                  type="text"
+                  id="settAiModel"
+                  class="settings-field__input"
+                  placeholder="Model or deployment"
+                />
+              </label>
+              <label class="settings-field" id="settAiApiKeyField">
+                <span class="settings-field__label">API key / token</span>
+                <span class="settings-field__hint">Stored in extension settings for AI requests.</span>
+                <input
+                  type="password"
+                  id="settAiApiKey"
+                  class="settings-field__input"
+                  autocomplete="off"
+                  placeholder="Paste API key"
+                />
+              </label>
+              <label class="settings-field" id="settAiEndpointField">
+                <span class="settings-field__label">Endpoint URL</span>
+                <span class="settings-field__hint">For custom APIs and Agentforce-compatible endpoints.</span>
+                <input
+                  type="url"
+                  id="settAiEndpoint"
+                  class="settings-field__input"
+                  placeholder="https://api.example.com/v1/chat/completions"
+                />
+              </label>
+              <label class="settings-field" id="settAiAgentforceOrgField">
+                <span class="settings-field__label">Agentforce org base URL (optional)</span>
+                <span class="settings-field__hint">Used as helper context for Agentforce configuration.</span>
+                <input
+                  type="url"
+                  id="settAiAgentforceOrgUrl"
+                  class="settings-field__input"
+                  placeholder="https://your-org.my.salesforce.com"
+                />
+              </label>
+            </div>
+            <p class="settings-ai-note" id="settAiProviderNote"></p>
           </section>
         </div>
         <footer class="settings-overlay__footer">
