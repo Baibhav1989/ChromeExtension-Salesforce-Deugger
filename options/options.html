@@ -96,16 +96,19 @@
       <section class="settings-card">
         <h2 class="settings-card__title">AI log analysis</h2>
         <p class="settings-card__lead">
-          Used by <strong>Analyze with AI</strong> in details view. Gemini Nano is default.
+          Used by <strong>Analyze with AI</strong> in details view. Chrome Built-in AI (Gemini Nano) is default.
         </p>
         <div class="settings-fields">
           <label class="settings-field">
             <span class="settings-field__label">AI provider</span>
             <select id="aiProvider" class="settings-field__select">
-              <option value="gemini-nano">Gemini Nano (on-device, default)</option>
-              <option value="gemini-api">Gemini API (Google key)</option>
-              <option value="openai-compatible">Custom OpenAI-compatible API</option>
-              <option value="agentforce">Agentforce AI</option>
+              <option value="gemini-nano">Chrome Built-in AI (Gemini Nano) - on-device, free, no key (default)</option>
+              <option value="cursor-ai">Cursor AI (BYO token/endpoint)</option>
+              <option value="claude-ai">Claude AI (Anthropic BYO API key)</option>
+              <option value="openai-codex">OpenAI Codex / ChatGPT (BYO API key)</option>
+              <option value="salesforce-einstein-llm">Salesforce Einstein LLM Generations (org-managed)</option>
+              <option value="salesforce-models-api">Salesforce Models REST API (org-managed)</option>
+              <option value="agentforce-agent">Agentforce Agent (org-managed)</option>
             </select>
           </label>
           <label class="settings-field" id="aiModelField">

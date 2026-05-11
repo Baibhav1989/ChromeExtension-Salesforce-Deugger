@@ -18,7 +18,7 @@ const DEFAULTS = {
   traceDurationMinutes: 15,
   openMode: "popup",
   aiProvider: "gemini-nano",
-  aiModel: "gemini-2.0-flash-lite",
+  aiModel: "",
   aiApiKey: "",
   aiEndpoint: "",
   aiAgentforceOrgUrl: "",

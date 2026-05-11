@@ -333,6 +333,39 @@ function buildAiPrompt(logText) {
   ].join("\n");
 }
 
+function getDefaultModelForProvider(provider) {
+  if (provider === "gemini-api") return "gemini-2.0-flash-lite";
+  if (provider === "openai-codex") return "gpt-4.1-mini";
+  if (provider === "claude-ai") return "claude-3-5-sonnet-latest";
+  return "";
+}
+
+function resolveProviderEndpoint(provider, settings) {
+  const explicit = sanitizeAiText(settings.endpoint);
+  if (explicit) return explicit;
+  if (provider === "openai-codex") {
+    return "https://api.openai.com/v1/chat/completions";
+  }
+  if (provider === "anthropic-claude") {
+    return "https://api.anthropic.com/v1/messages";
+  }
+  if (provider === "claude-ai") {
+    return "https://api.anthropic.com/v1/messages";
+  }
+  if (
+    (provider === "salesforce-einstein-llm" ||
+      provider === "salesforce-models-api" ||
+      provider === "agentforce-agent") &&
+    settings.agentforceOrgUrl
+  ) {
+    return `${settings.agentforceOrgUrl.replace(
+      /\/+$/,
+      ""
+    )}/services/data/v61.0/einstein/ai/chat/completions`;
+  }
+  return "";
+}
+
 function extractAiTextFromResponse(data) {
   if (!data) return "";
   if (typeof data === "string") return data;
@@ -386,7 +419,43 @@ async function ensureEndpointPermission(endpointUrl) {
   }
 }
 
-async function analyzeWithGeminiNano(prompt) {
+async function analyzeWithGeminiNano(prompt, onStatus) {
+  if (typeof globalThis.LanguageModel !== "undefined") {
+    let availability = "unknown";
+    try {
+      availability = await globalThis.LanguageModel.availability({
+        expectedInputs: [{ type: "text", languages: ["en"] }],
+        expectedOutputs: [{ type: "text", languages: ["en"] }],
+      });
+    } catch (error) {
+      logJsError("LanguageModel.availability", error);
+    }
+    if (availability === "unavailable") {
+      throw new Error(
+        "Gemini Nano is unavailable in this Chrome profile/device. Check chrome://on-device-internals and Chrome built-in AI requirements."
+      );
+    }
+    if (availability === "downloadable" || availability === "downloading") {
+      onStatus?.("Preparing Gemini Nano model (downloading if needed)...");
+    }
+    const session = await globalThis.LanguageModel.create({
+      monitor(monitor) {
+        monitor.addEventListener("downloadprogress", (event) => {
+          const pct = Number(event.loaded) * 100;
+          const safePct = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+          onStatus?.(`Downloading Gemini Nano model… ${safePct.toFixed(0)}%`);
+        });
+      },
+    });
+    try {
+      const result = await session.prompt(prompt);
+      return String(result || "").trim();
+    } finally {
+      if (typeof session.destroy === "function") {
+        await session.destroy();
+      }
+    }
+  }
   if (window.ai?.languageModel?.create) {
     const session = await window.ai.languageModel.create({
       temperature: 0.2,
@@ -410,7 +479,7 @@ async function analyzeWithGeminiNano(prompt) {
     return String(response || "").trim();
   }
   throw new Error(
-    "Gemini Nano is not available in this browser/profile. Choose Gemini API or custom provider in settings."
+    "Gemini Nano API is not detected in this context. Update Chrome and ensure built-in AI is enabled and supported by your device."
   );
 }
 
@@ -418,7 +487,7 @@ async function analyzeWithGeminiApi(prompt, settings) {
   if (!settings.apiKey) {
     throw new Error("Gemini API key missing. Add it in extension settings.");
   }
-  const model = settings.model || SETTINGS_STORAGE_DEFAULTS.aiModel;
+  const model = settings.model || "gemini-2.0-flash-lite";
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model
   )}:generateContent?key=${encodeURIComponent(settings.apiKey)}`;
@@ -445,22 +514,68 @@ async function analyzeWithGeminiApi(prompt, settings) {
   return text.trim();
 }
 
-async function analyzeWithOpenAiCompatible(prompt, settings) {
-  if (!settings.endpoint) {
+async function analyzeWithAnthropic(prompt, settings) {
+  const endpoint = resolveProviderEndpoint("claude-ai", settings);
+  if (!endpoint) {
     throw new Error("Endpoint URL missing. Configure endpoint in settings.");
   }
   if (!settings.apiKey) {
     throw new Error("API key/token missing. Add it in settings.");
   }
-  await ensureEndpointPermission(settings.endpoint);
-  const res = await fetch(settings.endpoint, {
+  if (!settings.model) {
+    throw new Error("Model name missing. Set a Claude model in settings.");
+  }
+  await ensureEndpointPermission(endpoint);
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": settings.apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: settings.model,
+      temperature: 0.2,
+      max_tokens: 1200,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = data?.error?.message || data?.message || `HTTP ${res.status}`;
+    throw new Error(String(msg));
+  }
+  const text = Array.isArray(data?.content)
+    ? data.content
+        .map((part) => (part?.type === "text" ? part.text : ""))
+        .filter(Boolean)
+        .join("\n")
+    : "";
+  if (!text) throw new Error("Anthropic API returned no text.");
+  return text.trim();
+}
+
+async function analyzeWithOpenAiCompatible(prompt, settings, provider) {
+  const endpoint = resolveProviderEndpoint(provider, settings);
+  if (!endpoint) {
+    if (provider === "cursor-ai") {
+      throw new Error("Cursor AI endpoint is missing. Set endpoint + token in settings.");
+    }
+    throw new Error("Endpoint URL missing. Configure endpoint in settings.");
+  }
+  if (!settings.apiKey) {
+    throw new Error("API key/token missing. Add it in settings.");
+  }
+  await ensureEndpointPermission(endpoint);
+  const modelName = settings.model || getDefaultModelForProvider(provider) || undefined;
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${settings.apiKey}`,
     },
     body: JSON.stringify({
-      model: settings.model || SETTINGS_STORAGE_DEFAULTS.aiModel,
+      model: modelName,
       temperature: 0.2,
       messages: [
         {
@@ -490,18 +605,21 @@ async function runAiAnalysis() {
     return;
   }
   const settings = await readAiSettings();
-  if (settings.provider === "agentforce" && !settings.endpoint && settings.agentforceOrgUrl) {
-    settings.endpoint = `${settings.agentforceOrgUrl.replace(
-      /\/+$/,
-      ""
-    )}/services/data/v61.0/einstein/ai/chat/completions`;
-  }
-  const providerLabel = {
-    "gemini-nano": "Gemini Nano",
-    "gemini-api": "Gemini API",
-    "openai-compatible": "Custom OpenAI-compatible",
-    agentforce: "Agentforce",
-  }[settings.provider];
+  settings.model = sanitizeAiText(
+    settings.model,
+    getDefaultModelForProvider(settings.provider)
+  );
+  const providerLabel =
+    {
+      "gemini-nano": "Chrome Built-in AI (Gemini Nano)",
+      "gemini-api": "Gemini API (legacy)",
+      "cursor-ai": "Cursor AI",
+      "claude-ai": "Claude AI",
+      "openai-codex": "OpenAI Codex / ChatGPT",
+      "salesforce-einstein-llm": "Salesforce Einstein LLM Generations",
+      "salesforce-models-api": "Salesforce Models REST API",
+      "agentforce-agent": "Agentforce Agent",
+    }[settings.provider] || "Configured provider";
   const modelLabel =
     settings.provider === "gemini-nano" ? "On-device model" : settings.model || "Configured model";
 
@@ -515,11 +633,15 @@ async function runAiAnalysis() {
   try {
     let responseText = "";
     if (settings.provider === "gemini-nano") {
-      responseText = await analyzeWithGeminiNano(prompt);
+      responseText = await analyzeWithGeminiNano(prompt, (statusMessage) => {
+        setAiPanelState(statusMessage, "", `${providerLabel} · ${modelLabel}`);
+      });
     } else if (settings.provider === "gemini-api") {
       responseText = await analyzeWithGeminiApi(prompt, settings);
+    } else if (settings.provider === "claude-ai") {
+      responseText = await analyzeWithAnthropic(prompt, settings);
     } else {
-      responseText = await analyzeWithOpenAiCompatible(prompt, settings);
+      responseText = await analyzeWithOpenAiCompatible(prompt, settings, settings.provider);
     }
     lastAiResult = responseText;
     setAiPanelState("Analysis complete.", responseText, `${providerLabel} · ${modelLabel}`);

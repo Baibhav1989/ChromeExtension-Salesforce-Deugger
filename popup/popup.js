@@ -146,33 +146,84 @@ async function handleOpenModeToggleChange(enabled) {
 function updateAiSettingsVisibility() {
   const provider = normalizeAiProvider(settAiProvider?.value);
   const isNano = provider === "gemini-nano";
+  const isCursor = provider === "cursor-ai";
+  const isClaude = provider === "claude-ai";
+  const isOpenAi = provider === "openai-codex";
   const isGeminiApi = provider === "gemini-api";
-  const isOpenAiCompat = provider === "openai-compatible";
-  const isAgentforce = provider === "agentforce";
+  const isSalesforceManaged =
+    provider === "salesforce-einstein-llm" ||
+    provider === "salesforce-models-api" ||
+    provider === "agentforce-agent";
 
   if (settAiModelField) settAiModelField.hidden = isNano;
   if (settAiApiKeyField) settAiApiKeyField.hidden = isNano;
-  if (settAiEndpointField) settAiEndpointField.hidden = !(isOpenAiCompat || isAgentforce);
-  if (settAiAgentforceOrgField) settAiAgentforceOrgField.hidden = !isAgentforce;
+  if (settAiEndpointField) settAiEndpointField.hidden = isNano || isGeminiApi;
+  if (settAiAgentforceOrgField) settAiAgentforceOrgField.hidden = !isSalesforceManaged;
+
+  if (settAiEndpoint) {
+    if (isOpenAi) {
+      settAiEndpoint.placeholder = "https://api.openai.com/v1/chat/completions";
+    } else if (isClaude) {
+      settAiEndpoint.placeholder = "https://api.anthropic.com/v1/messages";
+    } else if (isCursor) {
+      settAiEndpoint.placeholder = "https://your-cursor-proxy.example.com/v1/chat/completions";
+    } else if (isSalesforceManaged) {
+      settAiEndpoint.placeholder =
+        "https://your-org.my.salesforce.com/services/data/v61.0/einstein/ai/chat/completions";
+    } else {
+      settAiEndpoint.placeholder = "https://api.example.com/v1/chat/completions";
+    }
+  }
+
+  if (settAiModel) {
+    if (isOpenAi) {
+      settAiModel.placeholder = "gpt-4.1-mini";
+    } else if (isClaude) {
+      settAiModel.placeholder = "claude-3-5-sonnet-latest";
+    } else if (isCursor) {
+      settAiModel.placeholder = "cursor-default or your deployed model";
+    } else if (isSalesforceManaged) {
+      settAiModel.placeholder = "Model/deployment or agent name";
+    } else if (isGeminiApi) {
+      settAiModel.placeholder = "gemini-2.0-flash-lite";
+    } else {
+      settAiModel.placeholder = "Model or deployment";
+    }
+  }
 
   if (!settAiProviderNote) return;
   if (isNano) {
     settAiProviderNote.textContent =
-      "Gemini Nano runs on-device when available. If your browser/device does not expose Nano APIs, switch provider.";
+      "Uses Chrome Prompt API (`LanguageModel`) on-device. If unavailable, Chrome version/hardware requirements may not be met.";
+    return;
+  }
+  if (isOpenAi) {
+    settAiProviderNote.textContent =
+      "Uses OpenAI Chat Completions API with your API key.";
+    return;
+  }
+  if (isClaude) {
+    settAiProviderNote.textContent =
+      "Uses Anthropic Messages API with your Claude API key.";
+    return;
+  }
+  if (isCursor) {
+    settAiProviderNote.textContent =
+      "Cursor AI mode expects your token + endpoint (for proxy/gateway setups).";
+    return;
+  }
+  if (isSalesforceManaged) {
+    settAiProviderNote.textContent =
+      "Org-managed Salesforce mode. Configure org URL and/or endpoint plus a valid org token.";
     return;
   }
   if (isGeminiApi) {
     settAiProviderNote.textContent =
-      "Gemini API uses your Google API key and model name (for example: gemini-2.0-flash).";
-    return;
-  }
-  if (isAgentforce) {
-    settAiProviderNote.textContent =
-      "Agentforce mode uses your provided endpoint, model/deployment, token, and optional org URL context.";
+      "Legacy Gemini API mode: provide model and Google API key.";
     return;
   }
   settAiProviderNote.textContent =
-    "OpenAI-compatible mode sends chat-completion requests to your custom endpoint.";
+    "Configure provider credentials and endpoint to run AI analysis.";
 }
 
 async function getConfiguredDebugLevels() {
