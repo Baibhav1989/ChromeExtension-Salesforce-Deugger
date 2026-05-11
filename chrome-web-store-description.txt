@@ -1,75 +1,113 @@
-View Salesforce Apex code coverage by class with advanced metrics, test execution monitoring, and line-level analysis.
+Inspect Apex debug logs from your logged-in Salesforce session with automatic refresh, trace-flag controls, SOQL-aware viewing, structured error navigation, and optional AI-assisted analysis.
 
-Apex Class Coverage Viewer - Your Essential Salesforce Development Tool
-Apex Class Coverage Viewer is a powerful Chrome extension for Salesforce developers and QA engineers who need fast, reliable Apex code coverage insights directly in the browser.
+Salesforce Debugger — Your Essential Salesforce Debugging Tool
+
+Salesforce Debugger is a Manifest V3 Chrome extension for Salesforce developers, admins, and QA engineers who need fast access to Apex debug logs and trace setup directly from the browser—without leaving their Lightning or Setup workflow.
+
 
 🎯 KEY FEATURES
-✓ Real-Time Coverage Analysis
 
-View Apex classes with instant coverage metrics
-See covered and uncovered lines per class
-Track overall organizational coverage in one place
-✓ Detailed Metrics Dashboard
+✓ Apex debug log explorer
 
-Class-wise coverage breakdown
-Namespace filtering to exclude managed package classes
-Aggregate summary for classes, covered lines, uncovered lines, and overall coverage
-✓ Method-Wise Coverage Mapping
+Browse recent Apex logs returned via Salesforce Tooling queries against ApexLog (respecting your chosen log-user scope).
+Configurable fetch limit (up to 200 logs per refresh).
+Click any log row to open a dedicated detail viewer with reload and raw-log copy.
 
-Toggle method-wise mode to map Apex methods to test methods
-Click any class row to load method-level mapping
-Quickly understand which tests cover which logic paths
-✓ Test Class Execution Monitoring (NEW)
 
-Select and execute test classes directly from the extension
-Live status tracking (Queued, Running, Completed, Failed, Aborted)
-Auto-refresh coverage after successful execution
-Dedicated execution result section with failed methods and error details
-✓ Class Coverage Code Viewer (NEW)
+✓ Automatic refresh & session-aware loading
 
-View button for each class row
-Opens a VS Code-style dark modal viewer
-Line-level display with fixed line numbers
-Covered lines highlighted in green, uncovered in red
-Smooth vertical/horizontal scrolling for large classes
-✓ Advanced Table Interaction (NEW)
+Optional auto-refresh intervals (10s–60s) or manual-only refresh.
+Resolves API host and session from typical Salesforce URLs (production, sandbox, Lightning, and Setup-related hosts).
 
-Sort by each class table column (ascending/descending)
-Real-time search for class names
-Works seamlessly with package exclusion and sorting together
-✓ CSV Export
 
-Export visible coverage data to CSV
-Timestamp-based filename generation for tracking history
-Useful for reporting, audits, and compliance documentation
-✓ Smart Session Management
+✓ Log user filtering & trace management
 
-Import session from logged-in Salesforce tabs
-Supports production, sandbox, and Lightning domains
-Local storage for convenience and faster re-use
+Search and pick a Log User from your org context.
+Create trace flags (“Set Log”) using defaults you configure—trace duration (minutes) and category debug levels (Apex Code, Profiling, Callout, Database, System, Validation, Visualforce, Workflow).
+Remove active USER_DEBUG traces when you’re done (“Remove log”).
+
+
+✓ Bulk log housekeeping
+
+Select-all and delete selected Apex logs, or delete all logs visible under your current query scope.
+
+
+✓ Rich log detail viewer
+
+Summary chips for total lines, SOQL-related events, and surfaced errors—with quick navigation between matching rows.
+Toggle “Optimize log” for a grouped table view per code unit, or switch off for full chronological text with line numbers.
+Category visibility toggles for Debug (USER_DEBUG), Exceptions, Queries (SOQL), and Variable assignment.
+SOQL rows use distinct styling and extracted query text for faster scanning.
+
+
+✓ Error & SOQL navigation
+
+Dedicated controls to jump Previous / Next among highlighted errors or SOQL lines inside the filtered view.
+
+
+✓ Optional AI log analysis
+
+“Analyze with AI” summarizes or drills into the open log using providers you choose in Settings—including Chrome Built-in AI (Gemini Nano) when available, plus BYO-key options such as Claude, OpenAI Codex / ChatGPT, Cursor-compatible endpoints, and Salesforce-hosted paths where configured.
+
+
+✓ Full-tab mode & persistent settings
+
+Open the same UI as a normal browser tab when you prefer more screen space.
+Chrome storage remembers limits, refresh defaults, trace defaults, AI preferences, and UI choices.
+
+
 🔐 SECURITY & PRIVACY
-Credentials are stored locally in your browser only
-No external server dependency for data processing
-No third-party analytics/data collection
-Uses official Salesforce Tooling API endpoints
+
+Uses your existing Salesforce browser session—credentials are not sent through an intermediate logging server operated by this extension.
+
+Extension settings and any API keys or endpoints you enter for AI features are stored locally in Chrome (extension storage).
+
+Core log fetch, delete, and trace operations use official Salesforce REST / Tooling API endpoints against your org.
+
+Optional AI analysis calls third-party or Salesforce-hosted endpoints only when you explicitly configure those providers.
+
+No third-party analytics are included in this extension’s core Salesforce log flows.
+
+
 💼 PERFECT FOR
-Salesforce developers validating code quality
-QA engineers tracking test completeness
-Teams managing release readiness and coverage goals
-Audit/compliance workflows requiring exportable evidence
+
+Salesforce developers debugging Apex, triggers, flows, or integrations.
+
+QA engineers reproducing failures and correlating logs with steps.
+
+Admins troubleshooting validation rules, workflows, or user-context issues.
+
+Teams that want quicker trace setup without hopping through Setup for every iteration.
+
+
 ⚙️ REQUIREMENTS
-Active Salesforce org (production or sandbox)
-Valid session/OAuth token with API access
-Salesforce API version 50.0+
+
+Active Salesforce organization (production or sandbox).
+
+Logged into Salesforce in a tab whose host maps to your My Domain API host (Lightning / Setup tabs supported per manifest).
+
+Org user with permission to query Apex logs and manage Tooling-accessible trace resources.
+
+This build uses Salesforce REST API version v60.0 for the Tooling paths it calls.
+
+
 📝 HOW TO GET STARTED
-Click the extension icon
-Load/import your Salesforce session
-Click Load Coverage
-Analyze, sort, filter, execute tests, and inspect line-level coverage
-Export CSV when needed
+
+Pin Salesforce Debugger and open Lightning or Setup on your org.
+
+Open the popup—logs load using your active session.
+
+Optionally set auto-refresh, pick a Log User, and use Set Log / Remove log as needed.
+
+Open a log for summaries, filters, SOQL/error navigation, Optimize log toggles, and AI analysis.
+
+Use Settings for fetch limits, default refresh, trace duration, debug level defaults, and AI provider configuration.
+
+
 🚀 BUILT FOR DEVELOPERS, BY DEVELOPERS
-Created with attention to detail for the Salesforce development community.
+
+Built for day-to-day Salesforce debugging—fast lists, readable logs, and controls that stay where you already work.
 
 Developed by: Baibahv Kumar
-Version: 1.2.1
+Version: 1.0.0
 Category: Developer Tools
