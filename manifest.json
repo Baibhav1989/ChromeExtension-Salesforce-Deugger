@@ -8,7 +8,7 @@
     "48": "icon-48x48.png",
     "128": "icon-128x128.png"
   },
-  "permissions": ["storage", "cookies", "tabs", "alarms"],
+  "permissions": ["storage", "cookies", "tabs"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "host_permissions": [
     "https://*.salesforce.com/*",
