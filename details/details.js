@@ -1,11 +1,14 @@
 import {
+  buildLogDataRowsHtml,
   filterLogLines,
+  isExceptionLogRow,
   isExceptionsOnlyFilter,
   loadLogFilters,
   parseDebugLog,
   renderFullRawLogHtml,
   renderLogTableHtml,
   saveLogFilters,
+  segmentLogLines,
 } from "../lib/log-formatter.js";
 import {
   SETTINGS_STORAGE_DEFAULTS,
@@ -39,6 +42,20 @@ const CATEGORY_FILTER_IDS = [
   "filterQuery",
   "filterVariable",
 ];
+
+/** Above this line count or raw size, raw view uses a single pre block instead of per-line HTML. */
+const LARGE_RAW_LINE_THRESHOLD = 8000;
+const LARGE_RAW_CHAR_THRESHOLD = 1024 * 1024;
+
+/** Filtered table builds rows in chunks across animation frames to avoid freezing the tab. */
+const LARGE_TABLE_ROW_THRESHOLD = 3500;
+const TABLE_ROWS_PER_CHUNK = 450;
+
+function yieldToMain() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
 
 function logJsError(context, error) {
   const message = error?.stack || error?.message || String(error);
@@ -258,19 +275,134 @@ function scrollToSoqlIndex(i) {
   updateSoqlNavLabel();
 }
 
-function applyFiltersAndRender() {
+function renderLargeRawPlain(text) {
+  logTableHost.textContent = "";
+  const wrap = document.createElement("div");
+  wrap.className = "log-large-raw";
+  const note = document.createElement("p");
+  note.className = "log-large-notice";
+  note.textContent =
+    "Large log: showing plain text for faster loading. Per-line highlighting is off. Turn on Optimize log for a filtered table view.";
+  const pre = document.createElement("pre");
+  pre.className = "log-full-pre";
+  pre.setAttribute("role", "document");
+  pre.setAttribute("aria-label", "Full debug log text");
+  pre.textContent = text;
+  wrap.appendChild(note);
+  wrap.appendChild(pre);
+  logTableHost.appendChild(wrap);
+}
+
+function renderRawLogView() {
+  const lines = lastParsed.lines;
+  const large =
+    lines.length > LARGE_RAW_LINE_THRESHOLD ||
+    rawText.length > LARGE_RAW_CHAR_THRESHOLD;
+  if (large) {
+    renderLargeRawPlain(rawText);
+  } else {
+    logTableHost.innerHTML = renderFullRawLogHtml(lines);
+  }
+}
+
+async function renderOptimizedTableIncremental(filtered, emphasizeExceptions) {
+  if (!filtered.length) {
+    logTableHost.innerHTML = `<p class="log-table-empty">No log lines match the current filters. Turn on one or more categories above.</p>`;
+    return;
+  }
+  logTableHost.textContent = "";
+  const sectionsRoot = document.createElement("div");
+  sectionsRoot.className = "log-sections";
+  logTableHost.appendChild(sectionsRoot);
+
+  let errorRowSeq = 0;
+  const assignErrorRowId = () => {
+    errorRowSeq += 1;
+    return `log-error-row-${errorRowSeq}`;
+  };
+  let soqlRowSeq = 0;
+  const assignSoqlRowId = () => {
+    soqlRowSeq += 1;
+    return `log-soql-row-${soqlRowSeq}`;
+  };
+
+  const segments = segmentLogLines(filtered);
+  for (let idx = 0; idx < segments.length; idx += 1) {
+    const seg = segments[idx];
+    const isCodeUnit = seg.title.startsWith("Code unit");
+    const hasException = seg.lines.some(isExceptionLogRow);
+    const section = document.createElement("section");
+    section.className = [
+      "log-section",
+      emphasizeExceptions && isCodeUnit && hasException ? "log-section--has-exception" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    section.setAttribute("aria-labelledby", `log-section-${idx}`);
+    if (emphasizeExceptions && isCodeUnit && hasException) {
+      section.setAttribute(
+        "aria-description",
+        "This code unit contains an exception or error"
+      );
+    }
+
+    const h3 = document.createElement("h3");
+    h3.className = "log-section__title";
+    h3.id = `log-section-${idx}`;
+    h3.append(document.createTextNode(`${seg.title} `));
+    const countSpan = document.createElement("span");
+    countSpan.className = "log-section__count";
+    const n = seg.lines.length;
+    countSpan.textContent = `${n} line${n === 1 ? "" : "s"}`;
+    h3.appendChild(countSpan);
+
+    const scrollWrap = document.createElement("div");
+    scrollWrap.className = "log-table-scroll";
+    const table = document.createElement("table");
+    table.className = "log-data-table";
+    table.setAttribute("role", "grid");
+    const thead = document.createElement("thead");
+    thead.innerHTML =
+      "<tr><th scope=\"col\">Time</th><th scope=\"col\">Log type</th><th scope=\"col\">Class / method / context</th><th scope=\"col\">Detail</th></tr>";
+    const tbody = document.createElement("tbody");
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    scrollWrap.appendChild(table);
+
+    section.appendChild(h3);
+    section.appendChild(scrollWrap);
+    sectionsRoot.appendChild(section);
+
+    for (let off = 0; off < seg.lines.length; off += TABLE_ROWS_PER_CHUNK) {
+      const slice = seg.lines.slice(off, off + TABLE_ROWS_PER_CHUNK);
+      tbody.insertAdjacentHTML(
+        "beforeend",
+        buildLogDataRowsHtml(slice, emphasizeExceptions, assignErrorRowId, assignSoqlRowId)
+      );
+      await yieldToMain();
+    }
+  }
+
+}
+
+async function applyFiltersAndRender() {
   if (!lastParsed) return;
   if (!isOptimizedView()) return;
   const filters = readFiltersFromUi();
   saveLogFilters(filters);
   const filtered = filterLogLines(lastParsed.lines, filters);
-  logTableHost.innerHTML = renderLogTableHtml(filtered, {
-    emphasizeExceptions: isExceptionsOnlyFilter(filters),
-  });
+  const emphasizeExceptions = isExceptionsOnlyFilter(filters);
+  if (filtered.length > LARGE_TABLE_ROW_THRESHOLD) {
+    await renderOptimizedTableIncremental(filtered, emphasizeExceptions);
+  } else {
+    logTableHost.innerHTML = renderLogTableHtml(filtered, {
+      emphasizeExceptions,
+    });
+  }
   updateErrorSummaryAndNav();
 }
 
-function applyViewMode() {
+async function applyViewMode() {
   syncDetailsPageLayoutFlags();
   if (!lastParsed || !logMain) return;
   const optimized = isOptimizedView();
@@ -285,9 +417,9 @@ function applyViewMode() {
     if (soqlNavFlyout) soqlNavFlyout.hidden = true;
   }
   if (optimized) {
-    applyFiltersAndRender();
+    await applyFiltersAndRender();
   } else {
-    logTableHost.innerHTML = renderFullRawLogHtml(lastParsed.lines);
+    renderRawLogView();
     updateErrorSummaryAndNav();
   }
 }
@@ -724,7 +856,7 @@ filterAll.addEventListener("change", () => {
   filterVariable.checked = on;
   filterAll.indeterminate = false;
   if (isOptimizedView()) {
-    applyFiltersAndRender();
+    applyFiltersAndRender().catch((error) => logJsError("applyFiltersAndRender", error));
   } else {
     saveLogFilters(readFiltersFromUi());
   }
@@ -734,7 +866,7 @@ for (const id of CATEGORY_FILTER_IDS) {
   document.getElementById(id).addEventListener("change", () => {
     syncMasterCategoryCheckbox();
     if (isOptimizedView()) {
-      applyFiltersAndRender();
+      applyFiltersAndRender().catch((error) => logJsError("applyFiltersAndRender", error));
     } else {
       saveLogFilters(readFiltersFromUi());
     }
@@ -742,7 +874,9 @@ for (const id of CATEGORY_FILTER_IDS) {
 }
 
 if (chkOptimizeLog) {
-  chkOptimizeLog.addEventListener("change", () => applyViewMode());
+  chkOptimizeLog.addEventListener("change", () => {
+    applyViewMode().catch((error) => logJsError("applyViewMode", error));
+  });
 }
 
 pillErrorsBtn.addEventListener("click", () => {
@@ -859,7 +993,11 @@ async function fetchLog() {
   if (chkOptimizeLog) {
     chkOptimizeLog.checked = optimized;
   }
-  applyViewMode();
+  try {
+    await applyViewMode();
+  } catch (error) {
+    logJsError("applyViewMode", error);
+  }
   logMain.hidden = false;
 }
 
@@ -877,7 +1015,9 @@ btnCopy.addEventListener("click", async () => {
   }
 });
 
-btnReload.addEventListener("click", () => fetchLog());
+btnReload.addEventListener("click", () => {
+  fetchLog().catch((error) => logJsError("fetchLog", error));
+});
 
 if (btnAnalyzeAi) {
   btnAnalyzeAi.addEventListener("click", () => {
@@ -890,4 +1030,4 @@ btnClose.addEventListener("click", (e) => {
   window.close();
 });
 
-fetchLog();
+fetchLog().catch((error) => logJsError("fetchLog", error));

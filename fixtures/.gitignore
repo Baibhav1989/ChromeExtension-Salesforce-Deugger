@@ -1,0 +1,2 @@
+# Generated stress-test logs (multi-megabyte); regenerate with scripts/generate-dummy-log.mjs
+*.log
