@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Salesforce Logger",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Read Apex debug logs for the logged-in Salesforce session, with auto-refresh, SOQL highlighting, and readable errors.",
   "icons": {
     "16": "icon-16x16.png",
