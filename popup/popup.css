@@ -666,6 +666,10 @@ input:focus {
   box-shadow: var(--shadow-md);
 }
 
+.log-item--error {
+  border-color: rgba(234, 107, 107, 0.45);
+}
+
 .log-item:active {
   transform: scale(0.992);
 }
@@ -761,6 +765,16 @@ input:focus {
 .log-item__meta-val {
   color: var(--text);
   word-break: break-word;
+}
+
+.log-item__meta-row--error .log-item__meta-key {
+  color: var(--danger);
+}
+
+.log-item__meta-val--error {
+  color: var(--danger);
+  font-weight: 600;
+  white-space: pre-wrap;
 }
 
 .empty,

@@ -152,6 +152,33 @@ function normalizeDebugLevels(debugLevels) {
   return normalized;
 }
 
+/**
+ * Salesforce rejects a DeveloperName that contains consecutive underscores,
+ * ends with an underscore, or exceeds 40 characters.
+ * @param {Record<string, string>} levels
+ */
+function buildDebugLevelDeveloperName(levels) {
+  const prefix = "SFDbg";
+  const suffix = Date.now().toString(36).slice(-6).toUpperCase();
+  const maxCompact = 40 - prefix.length - suffix.length - 2;
+  const compact = [
+    levels.ApexCode,
+    levels.ApexProfiling,
+    levels.Callout,
+    levels.Database,
+    levels.System,
+    levels.Validation,
+    levels.Visualforce,
+    levels.Workflow,
+  ]
+    .join("_")
+    .replace(/[^A-Za-z0-9_]/g, "")
+    .slice(0, maxCompact)
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return [prefix, compact, suffix].filter(Boolean).join("_");
+}
+
 export async function getOrCreateDebugLevel(apiBase, sessionId, debugLevels = {}) {
   const levels = normalizeDebugLevels(debugLevels);
   const soql = [
@@ -172,20 +199,8 @@ export async function getOrCreateDebugLevel(apiBase, sessionId, debugLevels = {}
     return existing.records[0].Id;
   }
 
-  const signature = [
-    levels.ApexCode,
-    levels.ApexProfiling,
-    levels.Callout,
-    levels.Database,
-    levels.System,
-    levels.Validation,
-    levels.Visualforce,
-    levels.Workflow,
-  ].join("_");
-  const compact = signature.replace(/[^A-Z_]/g, "").slice(0, 28);
-  const suffix = Date.now().toString(36).slice(-6).toUpperCase();
-  const developerName = `SFDbg_${compact}_${suffix}`.slice(0, 40);
-  const masterLabel = `SF Debugger ${suffix}`.slice(0, 80);
+  const developerName = buildDebugLevelDeveloperName(levels);
+  const masterLabel = `SF Debugger ${developerName.split("_").pop()}`.slice(0, 80);
 
   const created = await toolingRequest(
     apiBase,

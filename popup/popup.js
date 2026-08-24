@@ -375,6 +375,20 @@ function openDetail(logId) {
   chrome.tabs.create({ url });
 }
 
+/**
+ * ApexLog.Status is "Success" for a clean run; otherwise it carries the failure
+ * reason (exception type and message, or a code such as Failed / Killed / Api_Error).
+ * @param {string | null | undefined} rawStatus
+ */
+function getLogStatusInfo(rawStatus) {
+  const text = String(rawStatus || "").trim();
+  if (!text) return { isError: false, label: "—", message: "", modifier: "" };
+  if (text.toLowerCase() === "success") {
+    return { isError: false, label: "Success", message: "", modifier: "log-item__status--success" };
+  }
+  return { isError: true, label: "Error", message: text, modifier: "log-item__status--fail" };
+}
+
 function renderRecords(records) {
   setBadge(`${records.length} logs`, true);
   emptyState.textContent = getSelectedUserId()
@@ -388,10 +402,8 @@ function renderRecords(records) {
     li.className = "log-item";
     li.dataset.logId = r.id;
 
-    const statusClass =
-      (r.status || "").toLowerCase() === "success"
-        ? "log-item__status--success"
-        : "log-item__status--fail";
+    const status = getLogStatusInfo(r.status);
+    if (status.isError) li.classList.add("log-item--error");
 
     li.innerHTML = `
       <label class="log-item__select">
@@ -400,9 +412,16 @@ function renderRecords(records) {
       <div class="log-item__body">
         <div class="log-item__top">
           <span class="log-item__time">${escapeHtml(formatTime(r.startTime))}</span>
-          <span class="log-item__status ${statusClass}">${escapeHtml(r.status || "—")}</span>
+          <span class="log-item__status ${status.modifier}">${escapeHtml(status.label)}</span>
         </div>
         <div class="log-item__meta">
+          ${
+            status.isError
+              ? `<div class="log-item__meta-row log-item__meta-row--error"><span class="log-item__meta-key">Error</span><span class="log-item__meta-val log-item__meta-val--error" title="${escapeHtml(
+                  status.message
+                )}">${escapeHtml(status.message)}</span></div>`
+              : ""
+          }
           <div class="log-item__meta-row"><span class="log-item__meta-key">Operation</span><span class="log-item__meta-val">${escapeHtml(r.operation || "—")}</span></div>
           <div class="log-item__meta-row"><span class="log-item__meta-key">Application</span><span class="log-item__meta-val">${escapeHtml(r.application || "—")}</span></div>
           <div class="log-item__meta-row"><span class="log-item__meta-key">User</span><span class="log-item__meta-val">${escapeHtml(r.logUserName || r.logUserId || "—")}</span></div>
